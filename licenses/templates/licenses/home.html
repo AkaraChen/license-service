@@ -1,0 +1,20 @@
+{% extends "licenses/base.html" %}
+{% block content %}
+<h1>My entitlements</h1>
+{% if entitlements %}
+<table>
+  <tr><th>Product</th><th>Status</th><th>Seats</th><th>Expires</th><th></th></tr>
+  {% for e in entitlements %}
+  <tr>
+    <td>{{ e.product.name }} (<code>{{ e.product.code }}</code>)</td>
+    <td>{{ e.status }}</td>
+    <td>{{ e.max_devices }}</td>
+    <td>{{ e.expires_at|default:"never" }}</td>
+    <td><a href="{% url 'ui_entitlement' entitlement_id=e.pk %}">Manage devices</a></td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}
+<p>No entitlements yet. <a href="{% url 'ui_redeem' %}">Redeem a license key</a>.</p>
+{% endif %}
+{% endblock %}

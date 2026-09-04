@@ -1,0 +1,6 @@
+{% extends "licenses/base.html" %}
+{% block content %}
+<h1>Request failed</h1>
+<p class="error">{{ error }}</p>
+<p><a href="{% url 'ui_home' %}">Back to my entitlements</a></p>
+{% endblock %}

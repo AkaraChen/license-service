@@ -1,0 +1,38 @@
+{% extends "licenses/base.html" %}
+{% block content %}
+<h1>Devices for {{ entitlement.product.name }}</h1>
+<p>Status: <strong>{{ entitlement.status }}</strong> &middot;
+   Seats: {{ seats_used }} used / {{ entitlement.max_devices }} total &middot;
+   Expires: {{ entitlement.expires_at|default:"never" }}</p>
+{% if devices %}
+<table>
+  <tr><th>Fingerprint</th><th>Name</th><th>Status</th><th>Bound at</th><th></th></tr>
+  {% for d in devices %}
+  <tr>
+    <td><code>{{ d.device_fingerprint }}</code></td>
+    <td>{{ d.display_name|default:"" }}</td>
+    <td>{{ d.status }}</td>
+    <td>{{ d.bound_at }}</td>
+    <td>
+      {% if d.status == "bound" %}
+      <form method="post" action="{% url 'ui_unbind_device' device_id=d.pk %}" style="display:inline">
+        {% csrf_token %}<button>Unbind</button>
+      </form>
+      <form method="post" action="{% url 'ui_rename_device' device_id=d.pk %}" style="display:inline">
+        {% csrf_token %}<input name="display_name" value="{{ d.display_name|default:'' }}" style="width:auto">
+        <button>Rename</button>
+      </form>
+      {% endif %}
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+{% endif %}
+<h2>Bind a new device</h2>
+<form method="post">
+  {% csrf_token %}
+  <label>Device fingerprint <input name="device_fingerprint" required maxlength="128"></label>
+  <label>Display name (optional) <input name="display_name"></label>
+  <button type="submit">Bind device</button>
+</form>
+{% endblock %}

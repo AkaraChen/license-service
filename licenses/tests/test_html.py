@@ -1,5 +1,5 @@
 """SPEC 17.8: HTML UI and host lifecycle; Section 3.1.4 page requirements."""
-import pytest
+
 from django.test import Client
 
 from licenses import services
@@ -24,7 +24,7 @@ def test_admin_console_requires_admin_session(db, admin, customer):
 
 
 def test_customer_pages_full_flow(db, customer, product):
-    key, plaintext = services.issue_key(product, max_devices=1)
+    _, plaintext = services.issue_key(product, max_devices=1)
     browser = Client()
 
     page = browser.get("/ui/register")
@@ -46,8 +46,10 @@ def test_customer_pages_full_flow(db, customer, product):
 
     page = browser.get(f"/ui/entitlements/{entitlement.pk}")
     assert page.status_code == 200
-    response = browser.post(f"/ui/entitlements/{entitlement.pk}",
-                            {"device_fingerprint": "browser-machine", "display_name": "Laptop"})
+    response = browser.post(
+        f"/ui/entitlements/{entitlement.pk}",
+        {"device_fingerprint": "browser-machine", "display_name": "Laptop"},
+    )
     assert response.status_code == 302
     device = Device.objects.get()
     assert device.status == "bound" and device.display_name == "Laptop"
@@ -69,7 +71,7 @@ def test_customer_pages_never_link_admin_console(db, customer, redeemed):
     entitlement, _ = redeemed
     for path in ("/", "/ui/redeem", f"/ui/entitlements/{entitlement.pk}", "/docs"):
         body = browser.get(path).content.decode()
-        assert 'href="/admin' not in body and "action=\"/admin" not in body
+        assert 'href="/admin' not in body and 'action="/admin' not in body
 
 
 def test_customer_cannot_open_foreign_entitlement_page(db, customer, other_customer, redeemed):
@@ -84,8 +86,9 @@ def test_customer_cannot_open_foreign_entitlement_page(db, customer, other_custo
 def test_admin_console_issue_key_shows_plaintext_once(db, admin, product):
     staff = Client()
     staff.login(username="root", password=ADMIN_PW)
-    response = staff.post("/admin/licenses/licensekey/add/",
-                          {"product": product.pk, "max_devices": "2"}, follow=True)
+    response = staff.post(
+        "/admin/licenses/licensekey/add/", {"product": product.pk, "max_devices": "2"}, follow=True
+    )
     assert response.status_code == 200
     body = response.content.decode()
     assert "lic_" in body  # issuing response shows plaintext once

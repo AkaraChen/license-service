@@ -1,4 +1,5 @@
 """SPEC 17.4: adapter / authorization. Invariants 4 and 6."""
+
 import pytest
 
 from licenses.models import Device, Product
@@ -31,8 +32,7 @@ def test_register_always_yields_non_admin(api):
 
 
 def test_register_cannot_escalate_via_unknown_field(api):
-    response = api.post("auth/register", {"username": "mallory", "password": "pw-12345",
-                                          "is_staff": True})
+    response = api.post("auth/register", {"username": "mallory", "password": "pw-12345", "is_staff": True})
     assert response.status_code == 400
 
 
@@ -53,7 +53,8 @@ def test_duplicate_product_code_conflict(admin_api):
 
 def test_customer_cannot_read_foreign_entitlement(customer_api, other_customer, redeemed):
     entitlement, _ = redeemed  # owned by alice; bob's client is built below
-    from .conftest import Api, BOB_PW
+    from .conftest import BOB_PW, Api
+
     bob = Api()
     bob.login("bob", BOB_PW)
     assert bob.get(f"me/entitlements/{entitlement.pk}").status_code == 404
@@ -63,7 +64,8 @@ def test_customer_cannot_read_foreign_entitlement(customer_api, other_customer, 
 def test_customer_cannot_unbind_or_rename_foreign_device(customer_api, other_customer, redeemed):
     entitlement, _ = redeemed
     device = Device.objects.create(entitlement=entitlement, device_fingerprint="alice-machine")
-    from .conftest import Api, BOB_PW
+    from .conftest import BOB_PW, Api
+
     bob = Api()
     bob.login("bob", BOB_PW)
     assert bob.post(f"me/devices/{device.pk}/unbind").status_code == 404
@@ -74,7 +76,8 @@ def test_customer_cannot_unbind_or_rename_foreign_device(customer_api, other_cus
 
 def test_foreign_rows_do_not_leak_existence(customer_api, other_customer, redeemed):
     entitlement, _ = redeemed
-    from .conftest import Api, BOB_PW
+    from .conftest import BOB_PW, Api
+
     bob = Api()
     bob.login("bob", BOB_PW)
     foreign = bob.get(f"me/entitlements/{entitlement.pk}")

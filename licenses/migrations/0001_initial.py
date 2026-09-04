@@ -6,71 +6,142 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
-    dependencies = [
-        migrations.swappable_dependency(settings.AUTH_USER_MODEL),
-    ]
+    dependencies = [migrations.swappable_dependency(settings.AUTH_USER_MODEL)]
 
     operations = [
         migrations.CreateModel(
-            name='Product',
+            name="Product",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('code', models.CharField(max_length=64, unique=True)),
-                ('name', models.CharField(max_length=200)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                    ),
+                ),
+                ("code", models.CharField(max_length=64, unique=True)),
+                ("name", models.CharField(max_length=200)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
             ],
         ),
         migrations.CreateModel(
-            name='Entitlement',
+            name="Entitlement",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('max_devices', models.PositiveIntegerField()),
-                ('expires_at', models.DateTimeField(blank=True, null=True)),
-                ('status', models.CharField(choices=[('active', 'active'), ('suspended', 'suspended'), ('revoked', 'revoked')], default='active', max_length=10)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('account', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='entitlements', to=settings.AUTH_USER_MODEL)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                    ),
+                ),
+                ("max_devices", models.PositiveIntegerField()),
+                ("expires_at", models.DateTimeField(blank=True, null=True)),
+                (
+                    "status",
+                    models.CharField(
+                        choices=[("active", "active"), ("suspended", "suspended"), ("revoked", "revoked")],
+                        default="active",
+                        max_length=10,
+                    ),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                (
+                    "account",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="entitlements",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
             ],
         ),
         migrations.CreateModel(
-            name='Device',
+            name="Device",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('device_fingerprint', models.CharField(max_length=128)),
-                ('display_name', models.CharField(blank=True, max_length=200, null=True)),
-                ('bound_at', models.DateTimeField(auto_now_add=True)),
-                ('status', models.CharField(choices=[('bound', 'bound'), ('unbound', 'unbound')], default='bound', max_length=10)),
-                ('entitlement', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='devices', to='licenses.entitlement')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                    ),
+                ),
+                ("device_fingerprint", models.CharField(max_length=128)),
+                ("display_name", models.CharField(blank=True, max_length=200, null=True)),
+                ("bound_at", models.DateTimeField(auto_now_add=True)),
+                (
+                    "status",
+                    models.CharField(
+                        choices=[("bound", "bound"), ("unbound", "unbound")], default="bound", max_length=10
+                    ),
+                ),
+                (
+                    "entitlement",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="devices",
+                        to="licenses.entitlement",
+                    ),
+                ),
             ],
         ),
         migrations.CreateModel(
-            name='LicenseKey',
+            name="LicenseKey",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('key_hash', models.CharField(max_length=64, unique=True)),
-                ('key_prefix', models.CharField(max_length=16)),
-                ('max_devices', models.PositiveIntegerField()),
-                ('expires_at', models.DateTimeField(blank=True, null=True)),
-                ('status', models.CharField(choices=[('issued', 'issued'), ('redeemed', 'redeemed'), ('revoked', 'revoked')], default='issued', max_length=10)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('redeemed_by', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, to=settings.AUTH_USER_MODEL)),
-                ('product', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='license_keys', to='licenses.product')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                    ),
+                ),
+                ("key_hash", models.CharField(max_length=64, unique=True)),
+                ("key_prefix", models.CharField(max_length=16)),
+                ("max_devices", models.PositiveIntegerField()),
+                ("expires_at", models.DateTimeField(blank=True, null=True)),
+                (
+                    "status",
+                    models.CharField(
+                        choices=[("issued", "issued"), ("redeemed", "redeemed"), ("revoked", "revoked")],
+                        default="issued",
+                        max_length=10,
+                    ),
+                ),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
+                (
+                    "redeemed_by",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
+                (
+                    "product",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="license_keys",
+                        to="licenses.product",
+                    ),
+                ),
             ],
         ),
         migrations.AddField(
-            model_name='entitlement',
-            name='source_key',
-            field=models.OneToOneField(on_delete=django.db.models.deletion.PROTECT, related_name='entitlement', to='licenses.licensekey'),
+            model_name="entitlement",
+            name="source_key",
+            field=models.OneToOneField(
+                on_delete=django.db.models.deletion.PROTECT,
+                related_name="entitlement",
+                to="licenses.licensekey",
+            ),
         ),
         migrations.AddField(
-            model_name='entitlement',
-            name='product',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, to='licenses.product'),
+            model_name="entitlement",
+            name="product",
+            field=models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, to="licenses.product"),
         ),
         migrations.AddConstraint(
-            model_name='entitlement',
-            constraint=models.UniqueConstraint(fields=('account', 'product'), name='one_entitlement_per_pair'),
+            model_name="entitlement",
+            constraint=models.UniqueConstraint(
+                fields=("account", "product"), name="one_entitlement_per_pair"
+            ),
         ),
     ]

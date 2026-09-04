@@ -1,4 +1,5 @@
 """SPEC 17.3: resources and secrets. Invariant 5; Section 9.1 restart durability."""
+
 import os
 import subprocess
 import sys
@@ -9,7 +10,7 @@ from django.db import connection
 
 from licenses.models import LicenseKey
 
-from .conftest import ADMIN_PW, ALICE_PW
+from .conftest import ALICE_PW
 
 
 def test_plaintext_key_never_stored_or_listed(admin_api, product):
@@ -21,7 +22,7 @@ def test_plaintext_key_never_stored_or_listed(admin_api, product):
     assert plaintext.startswith(key.key_prefix) and len(key.key_prefix) < len(plaintext)
     listed = admin_api.get("license-keys").content.decode()
     assert plaintext not in listed
-    assert admin_api.get(f"accounts/1").content.decode().find(plaintext) == -1
+    assert admin_api.get("accounts/1").content.decode().find(plaintext) == -1
 
 
 def test_password_plaintext_never_persisted(customer):
@@ -42,25 +43,30 @@ def test_restart_preserves_all_durable_rows(admin_api):
     """A separate process opening the same store file must see every row."""
     created = admin_api.json(admin_api.post("products", {"code": "demo", "name": "Demo"}))
     product_id = created["product"]["product_id"]
-    plaintext = admin_api.json(admin_api.post(
-        "license-keys", {"product_id": product_id, "max_devices": 2}))["license_key"]
+    plaintext = admin_api.json(admin_api.post("license-keys", {"product_id": product_id, "max_devices": 2}))[
+        "license_key"
+    ]
     admin_api.post("auth/register", {"username": "alice", "password": ALICE_PW})
     from .conftest import Api
+
     alice = Api()
     alice.login("alice", ALICE_PW)
     alice.post("me/redeem", {"license_key": plaintext})
     alice.post("activate", {"license_key": plaintext, "device_fingerprint": "m1"})
 
     db_file = connection.settings_dict["NAME"]
-    probe = ("import os,django;os.environ.setdefault('DJANGO_SETTINGS_MODULE','config.settings');"
-             "django.setup();"
-             "from django.contrib.auth.models import User;"
-             "from licenses.models import Product,LicenseKey,Entitlement,Device;"
-             "print(User.objects.count(),Product.objects.count(),LicenseKey.objects.count(),"
-             "Entitlement.objects.count(),Device.objects.count())")
+    probe = (
+        "import os,django;os.environ.setdefault('DJANGO_SETTINGS_MODULE','config.settings');"
+        "django.setup();"
+        "from django.contrib.auth.models import User;"
+        "from licenses.models import Product,LicenseKey,Entitlement,Device;"
+        "print(User.objects.count(),Product.objects.count(),LicenseKey.objects.count(),"
+        "Entitlement.objects.count(),Device.objects.count())"
+    )
     env = {**os.environ, "LICENSE_STORE_NAME": str(db_file)}
-    out = subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True,
-                         env=env, cwd="/workspace")
+    out = subprocess.run(
+        [sys.executable, "-c", probe], capture_output=True, text=True, env=env, cwd="/workspace", check=False
+    )
     assert out.returncode == 0, out.stderr
     assert out.stdout.split() == ["2", "1", "1", "1", "1"]
 
@@ -69,6 +75,7 @@ def test_session_survives_client_restart_simulation(customer_api, customer):
     """Sessions are DB-backed (durable): the same sessionid authenticates a new client."""
     session_cookie = customer_api.client.cookies["sessionid"].value
     from .conftest import Api
+
     fresh = Api()
     fresh.client.cookies.load({"sessionid": session_cookie})
     assert fresh.get("me/entitlements").status_code == 200

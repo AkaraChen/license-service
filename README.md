@@ -99,29 +99,36 @@ normative HTTP mapping: 400 `validation_error`; 401 `unauthenticated`; 403
 
 ## Code layout and audit budget
 
+Code is formatted with `ruff format` and linted with `ruff check` (see `ruff.toml`,
+line-length 110). Line counts below are **code lines measured by `scc`** (comments and
+blank lines excluded).
+
 The auditable core — entities and invariants (`models.py`), the Section 7 state
 machines (`services.py`), and the HTTP contract with validation, authorization, and
-audit logging (`api.py`) — is **496 lines**, within the 500-line budget. Everything
-else is thin presentation derived from the same registry/services.
+audit logging (`api.py`) — is **488 code lines**, within the 500-line budget.
+Everything else is thin presentation derived from the same registry/services.
 
-| File | Lines | Layer |
+| File | Code lines (scc) | Layer |
 | --- | --- | --- |
-| `licenses/models.py` | 51 | Persistence (entities, uniqueness invariants) |
-| `licenses/services.py` | 160 | Policy (redeem/bind/unbind/validate, seats) |
-| `licenses/api.py` | 285 | Coordination (25 ops, validation, authz, logging) |
-| **core subtotal** | **496** | |
-| `licenses/openapi.py` | 52 | Presentation (OpenAPI + /docs from the registry) |
-| `licenses/views_ui.py` | 99 | Presentation (Customer HTML pages) |
-| `licenses/admin.py` | 68 | Presentation (Admin console config) |
-| `licenses/apps.py` | 23 | Startup preflight checks |
-| `config/`, `manage.py` | 112 | Standard Django project scaffolding |
+| `licenses/models.py` | 50 | Persistence (entities, uniqueness invariants) |
+| `licenses/services.py` | 141 | Policy (redeem/bind/unbind/validate, seats) |
+| `licenses/api.py` | 297 | Coordination (25 ops, validation, authz, logging) |
+| **core subtotal** | **488** | |
+| `licenses/openapi.py` | 95 | Presentation (OpenAPI + /docs from the registry) |
+| `licenses/views_ui.py` | 98 | Presentation (Customer HTML pages) |
+| `licenses/admin.py` | 89 | Presentation (Admin console config) |
+| `licenses/apps.py` | 26 | Startup preflight checks |
+| `config/`, `manage.py` | 118 | Standard Django project scaffolding |
 | `licenses/templates/` | 158 | HTML (Django templates) |
-| `licenses/tests/` | 930 | pytest suite (not counted as core) |
+| `licenses/tests/` | 815 | pytest suite (not counted as core) |
+
+Reproduce: `scc --no-cocomo --no-size licenses/models.py licenses/services.py licenses/api.py`
 
 ## Tests
 
 ```bash
-python -m pytest
+python -m pytest              # 80 tests
+ruff format --check . && ruff check .   # style and lint gates
 ```
 
 80 tests, organized by SPEC Section 17:

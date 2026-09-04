@@ -1,6 +1,7 @@
 """JSON machine API (SPEC 5, 11). The OPERATIONS registry is the single source
 for URL patterns, validation, OpenAPI, and /docs (Section 12). Error envelope
 (5.3): {"error": <14.1 class>, "message": <str>}; session cookie auth."""
+
 import json
 import logging
 import uuid
@@ -18,43 +19,84 @@ from .models import Device, Entitlement, LicenseKey, Product
 from .services import Failure
 
 log = logging.getLogger("licenses.api")
-HTTP_STATUS = {"validation_error": 400, "unauthenticated": 401, "forbidden": 403,
-               "not_found": 404, "unknown_key": 404, "unknown_device": 404, "conflict": 409,
-               "already_entitled": 409, "key_already_redeemed": 409, "key_revoked": 409,
-               "seat_exhausted": 409, "entitlement_suspended": 409, "entitlement_revoked": 409,
-               "entitlement_expired": 409, "store_unavailable": 503}
+# Section 5.3 (normative) error class -> HTTP status
+HTTP_STATUS = {
+    cls: int(code)
+    for cls, code in (
+        pair.split(":")
+        for pair in (
+            "validation_error:400 unauthenticated:401 forbidden:403 not_found:404 unknown_key:404 "
+            "unknown_device:404 conflict:409 already_entitled:409 key_already_redeemed:409 key_revoked:409 "
+            "seat_exhausted:409 entitlement_suspended:409 entitlement_revoked:409 entitlement_expired:409 "
+            "store_unavailable:503"
+        ).split()
+    )
+}
 OPERATIONS = []  # (name, method, path, auth, fields, handler); fields = (name, kind, required)
+
 
 def op(name, method, op_path, auth, fields=()):
     def register(handler):
         OPERATIONS.append((name, method, op_path, auth, fields, handler))
         return handler
+
     return register
+
 
 def _iso(value):
     return value.isoformat() if value is not None else None
 
+
 def product_json(p):
     return {"product_id": p.pk, "code": p.code, "name": p.name, "created_at": _iso(p.created_at)}
 
+
 def key_json(k):  # never contains plaintext (17.3)
-    return {"key_id": k.pk, "product_id": k.product_id, "key_prefix": k.key_prefix,
-            "max_devices": k.max_devices, "expires_at": _iso(k.expires_at), "status": k.status,
-            "redeemed_by_account_id": k.redeemed_by_id, "created_at": _iso(k.created_at)}
+    return {
+        "key_id": k.pk,
+        "product_id": k.product_id,
+        "key_prefix": k.key_prefix,
+        "max_devices": k.max_devices,
+        "expires_at": _iso(k.expires_at),
+        "status": k.status,
+        "redeemed_by_account_id": k.redeemed_by_id,
+        "created_at": _iso(k.created_at),
+    }
+
 
 def entitlement_json(e):
-    return {"entitlement_id": e.pk, "account_id": e.account_id, "product_id": e.product_id,
-            "max_devices": e.max_devices, "expires_at": _iso(e.expires_at), "status": e.status,
-            "source_key_id": e.source_key_id, "created_at": _iso(e.created_at)}
+    return {
+        "entitlement_id": e.pk,
+        "account_id": e.account_id,
+        "product_id": e.product_id,
+        "max_devices": e.max_devices,
+        "expires_at": _iso(e.expires_at),
+        "status": e.status,
+        "source_key_id": e.source_key_id,
+        "created_at": _iso(e.created_at),
+    }
+
 
 def device_json(d):
-    return {"device_id": d.pk, "entitlement_id": d.entitlement_id,
-            "device_fingerprint": d.device_fingerprint, "display_name": d.display_name,
-            "bound_at": _iso(d.bound_at), "status": d.status}
+    return {
+        "device_id": d.pk,
+        "entitlement_id": d.entitlement_id,
+        "device_fingerprint": d.device_fingerprint,
+        "display_name": d.display_name,
+        "bound_at": _iso(d.bound_at),
+        "status": d.status,
+    }
+
 
 def account_json(u):  # never contains password_hash
-    return {"account_id": u.pk, "username": u.username, "is_admin": u.is_staff,
-            "email": u.email or None, "created_at": _iso(u.date_joined)}
+    return {
+        "account_id": u.pk,
+        "username": u.username,
+        "is_admin": u.is_staff,
+        "email": u.email or None,
+        "created_at": _iso(u.date_joined),
+    }
+
 
 def parse_body(request, fields):
     """Section 5.2: strict JSON object; unknown fields rejected; no partial mutation."""
@@ -80,14 +122,18 @@ def parse_body(request, fields):
                 raise Failure("validation_error", f"Missing required field: {name}.")
             continue
         value = data[name]
-        valid = {"str": type(value) is str, "int": type(value) is int,
-                 "str?": value is None or type(value) is str,
-                 "dt?": value is None or (type(value) is str and parse_datetime(value) is not None)}[kind]
+        valid = {
+            "str": type(value) is str,
+            "int": type(value) is int,
+            "str?": value is None or type(value) is str,
+            "dt?": value is None or (type(value) is str and parse_datetime(value) is not None),
+        }[kind]
         if not valid:
             raise Failure("validation_error", f"Field {name} has an invalid value.")
         if kind == "dt?":
             data[name] = parse_datetime(value) if value else None
     return data
+
 
 @csrf_exempt  # writes require a JSON content type; browsers use the CSRF-protected HTML pages
 def dispatch(request, op_path, **path_params):
@@ -95,8 +141,7 @@ def dispatch(request, op_path, **path_params):
     if request.method not in by_method:
         return JsonResponse({"error": "validation_error", "message": "Method not allowed."}, status=405)
     name, _, _, auth, fields, handler = by_method[request.method]
-    ctx = {"actor": "anonymous", "account_id": None, "product_id": None, "entitlement_id": None,
-           "device_id": None, "request_id": request.headers.get("X-Request-ID", uuid.uuid4().hex[:12])}
+    ctx = {"actor": "anonymous", "rid": request.headers.get("X-Request-ID", uuid.uuid4().hex[:12])}
     try:
         user = request.user
         if auth in ("session", "admin"):
@@ -116,11 +161,11 @@ def dispatch(request, op_path, **path_params):
         _audit(name, ctx)
         return JsonResponse({"error": error, "message": message}, status=HTTP_STATUS[error])
 
+
 def _audit(op_name, ctx):
     """Section 13 fields per mutating/validate call; never logs secrets or raw fingerprints."""
-    log.info("op=%s actor=%s account=%s product=%s entitlement=%s device=%s outcome=%s rid=%s",
-             op_name, ctx["actor"], ctx["account_id"], ctx["product_id"],
-             ctx["entitlement_id"], ctx["device_id"], ctx["outcome"], ctx["request_id"])
+    log.info("op=%s %s", op_name, " ".join(f"{k}={v}" for k, v in ctx.items()))
+
 
 def _get(model, pk):
     obj = model.objects.filter(pk=pk).first()
@@ -128,27 +173,35 @@ def _get(model, pk):
         raise Failure("not_found", f"Unknown {model.__name__.lower()} id.")
     return obj
 
+
 def _mine(model, pk, user):
     """Invariant 6: foreign rows answer not_found and never leak existence."""
     obj = model.objects.filter(pk=pk).first()
-    if obj is None or (hasattr(obj, "account_id") and obj.account_id != user.pk) \
-            or (hasattr(obj, "entitlement") and obj.entitlement.account_id != user.pk):
+    if (
+        obj is None
+        or (hasattr(obj, "account_id") and obj.account_id != user.pk)
+        or (hasattr(obj, "entitlement") and obj.entitlement.account_id != user.pk)
+    ):
         raise Failure("not_found", "Not found.")
     return obj
 
+
 def _list_op(name, op_path, auth, collection, model, serializer):
     op(name, "GET", op_path, auth)(
-        lambda request, data, ctx: ({collection: [serializer(x) for x in model.objects.order_by("pk")]}, 200))
+        lambda request, data, ctx: ({collection: [serializer(x) for x in model.objects.order_by("pk")]}, 200)
+    )
+
 
 def _get_op(name, op_path, auth, key, model, serializer):
-    op(name, "GET", op_path, auth)(
-        lambda request, data, ctx, pk: ({key: serializer(_get(model, pk))}, 200))
+    op(name, "GET", op_path, auth)(lambda request, data, ctx, pk: ({key: serializer(_get(model, pk))}, 200))
+
 
 @op("register", "POST", "auth/register", "anonymous", (("username", "str", True), ("password", "str", True)))
 def register(request, data, ctx):
     user = services.register_account(data["username"], data["password"])
     ctx.update(actor="customer", account_id=user.pk)
     return {"account": account_json(user)}, 201
+
 
 @op("login", "POST", "auth/login", "anonymous", (("username", "str", True), ("password", "str", True)))
 def login_op(request, data, ctx):
@@ -157,10 +210,12 @@ def login_op(request, data, ctx):
     ctx.update(actor="admin" if user.is_staff else "customer", account_id=user.pk)
     return {"account": account_json(user)}, 200
 
+
 @op("logout", "POST", "auth/logout", "session")
 def logout_op(request, data, ctx):
     logout(request)
     return {"ok": True}, 200
+
 
 @op("create_product", "POST", "products", "admin", (("code", "str", True), ("name", "str", True)))
 def create_product(request, data, ctx):
@@ -173,6 +228,7 @@ def create_product(request, data, ctx):
     ctx["product_id"] = product.pk
     return {"product": product_json(product)}, 201
 
+
 @op("update_product", "PATCH", "products/{pk}", "admin", (("name", "str", False),))  # code never changes
 def update_product(request, data, ctx, pk):
     product = _get(Product, pk)
@@ -182,19 +238,27 @@ def update_product(request, data, ctx, pk):
     ctx["product_id"] = product.pk
     return {"product": product_json(product)}, 200
 
-@op("issue_license_key", "POST", "license-keys", "admin",
-    (("product_id", "int", True), ("max_devices", "int", True), ("expires_at", "dt?", False)))
+
+@op(
+    "issue_license_key",
+    "POST",
+    "license-keys",
+    "admin",
+    (("product_id", "int", True), ("max_devices", "int", True), ("expires_at", "dt?", False)),
+)
 def issue_license_key(request, data, ctx):
     product = _get(Product, data["product_id"])
     key, plaintext = services.issue_key(product, data["max_devices"], data.get("expires_at"))
     ctx["product_id"] = product.pk
     return {"key": key_json(key), "license_key": plaintext}, 201  # plaintext returned once, here only
 
+
 @op("revoke_license_key", "POST", "license-keys/{pk}/revoke", "admin")
 def revoke_license_key(request, data, ctx, pk):
     key = services.revoke_key(_get(LicenseKey, pk))
     ctx["product_id"] = key.product_id
     return {"key": key_json(key)}, 200
+
 
 @op("set_entitlement_status", "POST", "entitlements/{pk}/status", "admin", (("status", "str", True),))
 def set_entitlement_status(request, data, ctx, pk):  # max_devices/expires_at are unknown fields (Invariant 7)
@@ -206,11 +270,13 @@ def set_entitlement_status(request, data, ctx, pk):  # max_devices/expires_at ar
     ctx.update(product_id=entitlement.product_id, entitlement_id=entitlement.pk)
     return {"entitlement": entitlement_json(entitlement)}, 200
 
+
 @op("unbind_device", "POST", "devices/{pk}/unbind", "admin")
 def unbind_device(request, data, ctx, pk):
     device = services.unbind(_get(Device, pk))
     ctx.update(entitlement_id=device.entitlement_id, device_id=device.pk)
     return {"device": device_json(device)}, 200
+
 
 _list_op("list_products", "products", "admin", "products", Product, product_json)
 _list_op("list_license_keys", "license-keys", "admin", "license_keys", LicenseKey, key_json)
@@ -220,38 +286,50 @@ _list_op("list_devices", "devices", "admin", "devices", Device, device_json)
 _get_op("get_product", "products/{pk}", "admin", "product", Product, product_json)
 _get_op("get_account", "accounts/{pk}", "admin", "account", User, account_json)
 
+
 @op("redeem_license_key", "POST", "me/redeem", "session", (("license_key", "str", True),))
 def redeem_license_key(request, data, ctx):
     entitlement, created = services.redeem(request.user, data["license_key"])
     ctx.update(product_id=entitlement.product_id, entitlement_id=entitlement.pk)
     return {"entitlement": entitlement_json(entitlement)}, 201 if created else 200
 
+
 @op("list_my_entitlements", "GET", "me/entitlements", "session")
 def list_my_entitlements(request, data, ctx):
     return {"entitlements": [entitlement_json(e) for e in request.user.entitlements.order_by("pk")]}, 200
 
+
 @op("get_my_entitlement", "GET", "me/entitlements/{pk}", "session")
 def get_my_entitlement(request, data, ctx, pk):
     return {"entitlement": entitlement_json(_mine(Entitlement, pk, request.user))}, 200
+
 
 @op("list_my_devices", "GET", "me/entitlements/{pk}/devices", "session")
 def list_my_devices(request, data, ctx, pk):
     entitlement = _mine(Entitlement, pk, request.user)
     return {"devices": [device_json(d) for d in entitlement.devices.order_by("pk")]}, 200
 
-@op("bind_my_device", "POST", "me/entitlements/{pk}/devices", "session",
-    (("device_fingerprint", "str", True), ("display_name", "str?", False)))
+
+@op(
+    "bind_my_device",
+    "POST",
+    "me/entitlements/{pk}/devices",
+    "session",
+    (("device_fingerprint", "str", True), ("display_name", "str?", False)),
+)
 def bind_my_device(request, data, ctx, pk):
     entitlement = _mine(Entitlement, pk, request.user)
     device, created = services.bind(entitlement, data["device_fingerprint"], data.get("display_name"))
     ctx.update(product_id=entitlement.product_id, entitlement_id=entitlement.pk, device_id=device.pk)
     return {"device": device_json(device)}, 201 if created else 200
 
+
 @op("unbind_my_device", "POST", "me/devices/{pk}/unbind", "session")
 def unbind_my_device(request, data, ctx, pk):
     device = services.unbind(_mine(Device, pk, request.user))
     ctx.update(entitlement_id=device.entitlement_id, device_id=device.pk)
     return {"device": device_json(device)}, 200
+
 
 @op("set_my_device_display_name", "PATCH", "me/devices/{pk}", "session", (("display_name", "str?", True),))
 def set_my_device_display_name(request, data, ctx, pk):
@@ -261,8 +339,14 @@ def set_my_device_display_name(request, data, ctx, pk):
     ctx.update(entitlement_id=device.entitlement_id, device_id=device.pk)
     return {"device": device_json(device)}, 200
 
-@op("activate_device", "POST", "activate", "anonymous",
-    (("license_key", "str", True), ("device_fingerprint", "str", True), ("display_name", "str?", False)))
+
+@op(
+    "activate_device",
+    "POST",
+    "activate",
+    "anonymous",
+    (("license_key", "str", True), ("device_fingerprint", "str", True), ("display_name", "str?", False)),
+)
 def activate_device(request, data, ctx):
     ctx["actor"] = "application"
     _, entitlement = services.resolve_redeemed_key(data["license_key"])
@@ -270,16 +354,24 @@ def activate_device(request, data, ctx):
     ctx.update(product_id=entitlement.product_id, entitlement_id=entitlement.pk, device_id=device.pk)
     return {"device": device_json(device)}, 201 if created else 200
 
-@op("validate_device", "POST", "validate", "anonymous",
-    (("license_key", "str", True), ("device_fingerprint", "str", True)))
+
+@op(
+    "validate_device",
+    "POST",
+    "validate",
+    "anonymous",
+    (("license_key", "str", True), ("device_fingerprint", "str", True)),
+)
 def validate_device(request, data, ctx):
     ctx["actor"] = "application"
     device = services.validate(data["license_key"], data["device_fingerprint"])
     ctx.update(entitlement_id=device.entitlement_id, device_id=device.pk)
     return {"valid": True, "device": device_json(device)}, 200
 
+
 _BY_PATH = {}
 for _entry in OPERATIONS:
     _BY_PATH.setdefault(_entry[2], {})[_entry[1]] = _entry
-urlpatterns = [path(f"api/{p.replace('{', '<int:').replace('}', '>')}", dispatch, {"op_path": p})
-               for p in _BY_PATH]
+urlpatterns = [
+    path(f"api/{p.replace('{', '<int:').replace('}', '>')}", dispatch, {"op_path": p}) for p in _BY_PATH
+]

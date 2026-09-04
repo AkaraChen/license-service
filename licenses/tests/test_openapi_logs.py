@@ -1,4 +1,5 @@
 """SPEC 17.7: observability and OpenAPI (Sections 12 and 13)."""
+
 import json
 import logging
 
@@ -7,14 +8,31 @@ from licenses.api import OPERATIONS
 from .conftest import ALICE_PW
 
 EXPECTED_OPERATIONS = {
-    "create_product", "update_product", "list_products", "get_product",
-    "issue_license_key", "revoke_license_key", "list_license_keys",
-    "list_accounts", "get_account", "list_entitlements", "set_entitlement_status",
-    "list_devices", "unbind_device",
-    "register", "login", "logout", "redeem_license_key",
-    "list_my_entitlements", "get_my_entitlement", "list_my_devices",
-    "bind_my_device", "unbind_my_device", "set_my_device_display_name",
-    "activate_device", "validate_device",
+    "create_product",
+    "update_product",
+    "list_products",
+    "get_product",
+    "issue_license_key",
+    "revoke_license_key",
+    "list_license_keys",
+    "list_accounts",
+    "get_account",
+    "list_entitlements",
+    "set_entitlement_status",
+    "list_devices",
+    "unbind_device",
+    "register",
+    "login",
+    "logout",
+    "redeem_license_key",
+    "list_my_entitlements",
+    "get_my_entitlement",
+    "list_my_devices",
+    "bind_my_device",
+    "unbind_my_device",
+    "set_my_device_display_name",
+    "activate_device",
+    "validate_device",
 }
 
 
@@ -58,29 +76,32 @@ def test_human_readable_docs_served_and_consistent(api):
 
 
 def test_mutating_calls_log_actor_and_outcome(api, customer_api, redeemed, caplog):
-    entitlement, plaintext = redeemed
+    _, plaintext = redeemed
     with caplog.at_level(logging.INFO, logger="licenses.api"):
         customer_api.post("me/redeem", {"license_key": plaintext})  # idempotent re-redeem
         api.post("activate", {"license_key": plaintext, "device_fingerprint": "m1"})
         api.post("validate", {"license_key": plaintext, "device_fingerprint": "ghost"})
     messages = [r.getMessage() for r in caplog.records]
-    assert any("op=redeem_license_key" in m and "actor=customer" in m and "outcome=success" in m
-               for m in messages)
-    assert any("op=activate_device" in m and "actor=application" in m and "outcome=success" in m
-               for m in messages)
+    assert any(
+        "op=redeem_license_key" in m and "actor=customer" in m and "outcome=success" in m for m in messages
+    )
+    assert any(
+        "op=activate_device" in m and "actor=application" in m and "outcome=success" in m for m in messages
+    )
     assert any("op=validate_device" in m and "outcome=unknown_device" in m for m in messages)
     assert any("rid=" in m for m in messages)
 
 
-def test_logs_never_contain_secrets_or_raw_fingerprints(api, admin_api, customer_api,
-                                                        product, redeemed, caplog):
+def test_logs_never_contain_secrets_or_raw_fingerprints(
+    api, admin_api, customer_api, product, redeemed, caplog
+):
     entitlement, plaintext = redeemed
     with caplog.at_level(logging.INFO, logger="licenses.api"):
         admin_api.post("license-keys", {"product_id": product.pk, "max_devices": 1})
-        customer_api.post(f"me/entitlements/{entitlement.pk}/devices",
-                          {"device_fingerprint": "secret-fingerprint-1"})
-        api.post("validate", {"license_key": plaintext,
-                              "device_fingerprint": "secret-fingerprint-1"})
+        customer_api.post(
+            f"me/entitlements/{entitlement.pk}/devices", {"device_fingerprint": "secret-fingerprint-1"}
+        )
+        api.post("validate", {"license_key": plaintext, "device_fingerprint": "secret-fingerprint-1"})
     blob = "\n".join(r.getMessage() for r in caplog.records)
     assert plaintext not in blob
     assert ALICE_PW not in blob

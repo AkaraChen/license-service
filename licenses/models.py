@@ -2,6 +2,7 @@
 Store. Account = django.contrib.auth.models.User: account_id = User.pk,
 is_admin = User.is_staff, password_hash = User.password (PBKDF2-SHA256),
 created_at = User.date_joined. One Account type for Admin and Customer."""
+
 from django.conf import settings
 from django.db import models
 
@@ -18,18 +19,24 @@ class Product(models.Model):
 class LicenseKey(models.Model):
     STATUSES = (("issued", "issued"), ("redeemed", "redeemed"), ("revoked", "revoked"))
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="license_keys")
-    key_hash = models.CharField(max_length=64, unique=True)  # SHA-256 hex of plaintext; plaintext never persists
+    key_hash = models.CharField(
+        max_length=64, unique=True
+    )  # SHA-256 hex of plaintext; plaintext never persists
     key_prefix = models.CharField(max_length=16)  # non-secret recognition prefix, cannot authenticate
     max_devices = models.PositiveIntegerField()
     expires_at = models.DateTimeField(null=True, blank=True)
     status = models.CharField(max_length=10, choices=STATUSES, default="issued")
-    redeemed_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
+    redeemed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
 
 class Entitlement(models.Model):
     STATUSES = (("active", "active"), ("suspended", "suspended"), ("revoked", "revoked"))
-    account = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="entitlements")
+    account = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="entitlements"
+    )
     product = models.ForeignKey(Product, on_delete=models.PROTECT)
     max_devices = models.PositiveIntegerField()  # immutable after insert (Invariant 7)
     expires_at = models.DateTimeField(null=True, blank=True)  # immutable after insert
@@ -39,7 +46,9 @@ class Entitlement(models.Model):
 
     class Meta:
         # Invariant 1: at most one Entitlement per (account_id, product_id).
-        constraints = [models.UniqueConstraint(fields=("account", "product"), name="one_entitlement_per_pair")]
+        constraints = [  # noqa: RUF012 - Django Meta idiom
+            models.UniqueConstraint(fields=("account", "product"), name="one_entitlement_per_pair")
+        ]
 
 
 class Device(models.Model):
@@ -48,4 +57,6 @@ class Device(models.Model):
     device_fingerprint = models.CharField(max_length=128)  # trimmed, case-sensitive, max 128 chars
     display_name = models.CharField(max_length=200, null=True, blank=True)
     bound_at = models.DateTimeField(auto_now_add=True)
-    status = models.CharField(max_length=10, choices=STATUSES, default="bound")  # only "bound" occupies a seat
+    status = models.CharField(
+        max_length=10, choices=STATUSES, default="bound"
+    )  # only "bound" occupies a seat

@@ -2,20 +2,30 @@
 (is_staff) by Django itself. Key plaintext is shown once at issue time via a
 flash message and never stored; password hashes are never displayed.
 """
+
 from django.contrib import admin, messages
 from django.contrib.auth.models import User
 
 from . import services
 from .models import Device, Entitlement, LicenseKey, Product
 
+
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
     list_display = ("code", "name", "created_at")
 
+
 @admin.register(LicenseKey)
 class LicenseKeyAdmin(admin.ModelAdmin):
-    list_display = ("key_prefix", "product", "status", "max_devices", "expires_at",
-                    "redeemed_by", "created_at")
+    list_display = (
+        "key_prefix",
+        "product",
+        "status",
+        "max_devices",
+        "expires_at",
+        "redeemed_by",
+        "created_at",
+    )
     fields = ("product", "max_devices", "expires_at")  # add form; key_hash is never shown
     actions = ("revoke_keys",)
 
@@ -32,6 +42,7 @@ class LicenseKeyAdmin(admin.ModelAdmin):
         for key in queryset:
             services.revoke_key(key)
 
+
 @admin.register(Entitlement)
 class EntitlementAdmin(admin.ModelAdmin):
     list_display = ("account", "product", "status", "max_devices", "expires_at", "created_at")
@@ -41,6 +52,7 @@ class EntitlementAdmin(admin.ModelAdmin):
 
     def has_add_permission(self, request):
         return False
+
 
 @admin.register(Device)
 class DeviceAdmin(admin.ModelAdmin):
@@ -58,7 +70,9 @@ class DeviceAdmin(admin.ModelAdmin):
         for device in queryset:
             services.unbind(device)
 
+
 admin.site.unregister(User)
+
 
 @admin.register(User)
 class AccountAdmin(admin.ModelAdmin):

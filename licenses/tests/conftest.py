@@ -21,8 +21,7 @@ class Api:
     def call(self, method, path, body="__skip__", content_type="application/json"):
         kwargs = {}
         if body != "__skip__":
-            kwargs.update(data=body if isinstance(body, str) else json.dumps(body),
-                          content_type=content_type)
+            kwargs.update(data=body if isinstance(body, str) else json.dumps(body), content_type=content_type)
         return self.client.generic(method, f"/api/{path}", **kwargs)
 
     def get(self, path):

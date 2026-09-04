@@ -15,4 +15,5 @@ urlpatterns = [
     path("ui/entitlements/<int:entitlement_id>", views_ui.entitlement_page, name="ui_entitlement"),
     path("ui/devices/<int:device_id>/unbind", views_ui.unbind_page, name="ui_unbind_device"),
     path("ui/devices/<int:device_id>/rename", views_ui.rename_page, name="ui_rename_device"),
-] + api.urlpatterns
+    *api.urlpatterns,
+]

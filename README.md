@@ -8,10 +8,10 @@ document — all served by one process.
 ## Quickstart
 
 ```bash
-pip install -r requirements.txt
-python manage.py migrate
-python manage.py createsuperuser        # bootstrap: the only way to create an Admin (6.4)
-python manage.py runserver "$LICENSE_LISTEN_HOST:$LICENSE_LISTEN_PORT"  # defaults 127.0.0.1:8000
+uv sync
+uv run python manage.py migrate
+uv run python manage.py createsuperuser        # bootstrap: the only way to create an Admin (6.4)
+uv run python manage.py runserver "$LICENSE_LISTEN_HOST:$LICENSE_LISTEN_PORT"  # defaults 127.0.0.1:8000
 ```
 
 Then open:
@@ -127,8 +127,8 @@ Reproduce: `scc --no-cocomo --no-size licenses/models.py licenses/services.py li
 ## Tests
 
 ```bash
-python -m pytest              # 80 tests
-ruff format --check . && ruff check .   # style and lint gates
+uv run pytest                 # 80 tests
+uv run ruff format --check . && uv run ruff check .   # style and lint gates
 ```
 
 80 tests, organized by SPEC Section 17:

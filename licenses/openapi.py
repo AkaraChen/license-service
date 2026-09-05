@@ -1,9 +1,8 @@
-"""OpenAPI document and human-readable API docs, both generated from the same
-OPERATIONS registry that produces the running HTTP implementation (Section 12).
+"""OpenAPI document generated from the same OPERATIONS registry that produces
+the running HTTP implementation (Section 12).
 """
 
 from django.http import JsonResponse
-from django.shortcuts import render
 
 from .api import HTTP_STATUS, OPERATIONS
 
@@ -18,7 +17,6 @@ _ERROR_SCHEMA = {
     "required": ["error", "message"],
     "properties": {"error": {"type": "string", "enum": sorted(HTTP_STATUS)}, "message": {"type": "string"}},
 }
-_AUTH_TEXT = {"anonymous": "none", "session": "session cookie", "admin": "admin session cookie"}
 
 
 def build_openapi():
@@ -62,7 +60,7 @@ def build_openapi():
         "info": {
             "title": "License Service",
             "version": "3.0.0",
-            "description": "Single-tenant license key service. See /docs for the profile.",
+            "description": "Single-tenant license key service.",
         },
         "paths": paths,
         "components": {
@@ -74,19 +72,3 @@ def build_openapi():
 
 def openapi_view(request):
     return JsonResponse(build_openapi())
-
-
-def docs_view(request):
-    """Human-readable API documentation (Section 5.1.6), rendered from the same
-    registry so it cannot contradict the OpenAPI document."""
-    rows = [
-        {
-            "name": name,
-            "method": method,
-            "path": f"/api/{op_path}",
-            "auth": _AUTH_TEXT[auth],
-            "fields": [(n, kind, req) for n, kind, req in fields],
-        }
-        for name, method, op_path, auth, fields, _ in OPERATIONS
-    ]
-    return render(request, "licenses/docs.html", {"operations": rows, "errors": sorted(HTTP_STATUS.items())})

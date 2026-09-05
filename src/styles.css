@@ -2,43 +2,114 @@
 
 @source "../licenses/templates";
 
+/* Vercel / Geist product UI (eric-design DNA). App surface: grayscale + one blue accent. */
+@theme {
+  --font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SFMono-Regular", menlo, monospace;
+
+  --color-canvas: #fafafa;
+  --color-surface: #ffffff;
+  --color-ink: #171717;
+  --color-ink-secondary: #4d4d4d;
+  --color-ink-muted: #8f8f8f;
+  --color-line: #eaeaea;
+  --color-line-strong: #c9c9c9;
+  --color-accent: #006bff;
+  --color-accent-hover: #005ff2;
+  --color-danger: #ea001d;
+  --color-danger-soft: #fff0f2;
+
+  --radius-sm: 6px;
+  --radius-md: 12px;
+}
+
 @layer base {
+  html,
+  body {
+    overscroll-behavior-y: none;
+  }
+
+  body {
+    @apply bg-canvas font-sans text-sm text-ink antialiased;
+  }
+
   a {
-    @apply text-blue-700 underline;
+    @apply text-accent no-underline;
   }
+
+  a:hover {
+    @apply text-accent-hover underline;
+  }
+
+  nav a {
+    @apply text-ink no-underline;
+  }
+
+  nav a:hover {
+    @apply text-ink-secondary no-underline;
+  }
+
   h1 {
-    @apply mb-4 text-2xl font-semibold;
+    @apply mb-6 text-2xl font-semibold tracking-tight;
   }
+
   h2 {
-    @apply mt-6 mb-3 text-lg font-semibold;
+    @apply mt-8 mb-3 text-base font-semibold tracking-tight;
   }
+
+  p {
+    @apply text-ink-secondary;
+  }
+
   label {
-    @apply mb-2 block;
+    @apply mb-3 block text-sm text-ink;
   }
-  input,
-  button {
-    @apply my-1 px-2.5 py-1.5 text-base;
-  }
+
   input {
-    @apply box-border w-full rounded border border-neutral-300;
+    @apply box-border mt-1.5 h-10 w-full rounded-sm border border-line bg-surface px-3 text-sm text-ink;
   }
+
+  input:focus-visible,
+  button:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--color-accent);
+  }
+
   button {
-    @apply cursor-pointer rounded border border-neutral-300 bg-neutral-100 hover:bg-neutral-200;
+    @apply mt-1 inline-flex h-8 cursor-pointer items-center rounded-sm border border-line bg-surface px-3 text-sm font-medium text-ink;
   }
+
+  button:hover {
+    @apply bg-canvas;
+  }
+
   table {
-    @apply w-full border-collapse;
+    @apply w-full border-collapse text-sm;
   }
-  th,
+
+  th {
+    @apply border-b border-line px-3 py-2 text-left text-xs font-medium text-ink-secondary;
+  }
+
   td {
-    @apply border border-neutral-300 px-2.5 py-1.5 text-left;
+    @apply border-b border-line px-3 py-2 align-middle;
   }
+
   code {
-    @apply rounded bg-neutral-100 px-1 text-sm;
+    @apply rounded-sm border border-line bg-surface px-1 py-0.5 font-mono text-[13px] text-ink;
   }
 }
 
 @layer components {
+  .btn-primary {
+    @apply border-ink bg-ink text-surface;
+  }
+
+  .btn-primary:hover {
+    @apply border-ink-secondary bg-ink-secondary text-surface;
+  }
+
   .error {
-    @apply my-2 rounded border border-red-300 bg-red-50 px-3 py-2;
+    @apply my-4 rounded-sm border border-danger/20 bg-danger-soft px-3 py-2 text-sm text-danger;
   }
 }

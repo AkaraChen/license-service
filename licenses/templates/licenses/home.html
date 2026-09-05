@@ -2,6 +2,7 @@
 {% block content %}
 <h1>My entitlements</h1>
 {% if entitlements %}
+<div class="overflow-x-auto">
 <table>
   <tr><th>Product</th><th>Status</th><th>Seats</th><th>Expires</th><th></th></tr>
   {% for e in entitlements %}
@@ -14,6 +15,7 @@
   </tr>
   {% endfor %}
 </table>
+</div>
 {% else %}
 <p>No entitlements yet. <a href="{% url 'ui_redeem' %}">Redeem a license key</a>.</p>
 {% endif %}

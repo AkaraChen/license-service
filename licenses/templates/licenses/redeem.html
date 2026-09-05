@@ -2,9 +2,9 @@
 {% block content %}
 <h1>Redeem a license key</h1>
 {% if error %}<p class="error">{{ error }}</p>{% endif %}
-<form method="post">
+<form method="post" class="max-w-sm">
   {% csrf_token %}
   <label>License key <input name="license_key" required autocomplete="off"></label>
-  <button type="submit">Redeem</button>
+  <button type="submit" class="btn-primary">Redeem</button>
 </form>
 {% endblock %}

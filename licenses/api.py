@@ -1,5 +1,5 @@
 """JSON machine API (SPEC 5, 11). The OPERATIONS registry is the single source
-for URL patterns, validation, OpenAPI, and /docs (Section 12). Error envelope
+for URL patterns, validation, and OpenAPI (Section 12). Error envelope
 (5.3): {"error": <14.1 class>, "message": <str>}; session cookie auth."""
 
 import json

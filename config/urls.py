@@ -6,7 +6,6 @@ from licenses import api, openapi, views_ui
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("openapi.json", openapi.openapi_view, name="openapi"),
-    path("docs", openapi.docs_view, name="docs"),
     path("", views_ui.home, name="ui_home"),
     path("ui/register", views_ui.register_page, name="ui_register"),
     path("ui/login", views_ui.login_page, name="ui_login"),

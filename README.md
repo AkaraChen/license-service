@@ -24,7 +24,6 @@ Then open:
 | `/ui/register`, `/ui/login` | Customer self-service pages |
 | `/` | Customer entitlement list (login required) |
 | `/openapi.json` | OpenAPI 3.1 document, generated from the operation registry |
-| `/docs` | Human-readable API documentation, generated from the same registry |
 | `/api/...` | JSON machine API (25 operations, SPEC Section 11) |
 
 ## Configuration (SPEC Section 6)
@@ -116,7 +115,7 @@ Everything else is thin presentation derived from the same registry/services.
 | `licenses/services.py` | 141 | Policy (redeem/bind/unbind/validate, seats) |
 | `licenses/api.py` | 297 | Coordination (25 ops, validation, authz, logging) |
 | **core subtotal** | **488** | |
-| `licenses/openapi.py` | 95 | Presentation (OpenAPI + /docs from the registry) |
+| `licenses/openapi.py` | 95 | Presentation (OpenAPI from the registry) |
 | `licenses/views_ui.py` | 98 | Presentation (Customer HTML pages) |
 | `licenses/admin.py` | 89 | Presentation (Admin console config) |
 | `licenses/apps.py` | 26 | Startup preflight checks |
@@ -130,11 +129,11 @@ Reproduce: `scc --no-cocomo --no-size licenses/models.py licenses/services.py li
 ## Tests
 
 ```bash
-uv run pytest                 # 80 tests
+uv run pytest                 # 79 tests
 uv run ruff format --check . && uv run ruff check .   # style and lint gates
 ```
 
-80 tests, organized by SPEC Section 17:
+79 tests, organized by SPEC Section 17:
 
 - `test_parsing.py` — 17.2: unknown/missing/typed fields, envelope shape, status
   mapping, session requirements, empty-list behavior.

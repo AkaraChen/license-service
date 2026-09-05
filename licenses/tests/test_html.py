@@ -70,7 +70,7 @@ def test_customer_pages_never_link_admin_console(db, customer, redeemed):
     browser = Client()
     browser.login(username="alice", password=ALICE_PW)
     entitlement, _ = redeemed
-    for path in ("/", "/ui/redeem", f"/ui/entitlements/{entitlement.pk}", "/docs"):
+    for path in ("/", "/ui/redeem", f"/ui/entitlements/{entitlement.pk}"):
         body = browser.get(path).content.decode()
         assert 'href="/admin' not in body and 'action="/admin' not in body
 

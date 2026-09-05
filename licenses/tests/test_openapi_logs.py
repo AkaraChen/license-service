@@ -66,15 +66,6 @@ def test_openapi_describes_error_envelope_and_write_fields(api):
     assert validate["security"] == []  # no session cookie for application calls
 
 
-def test_human_readable_docs_served_and_consistent(api):
-    response = api.client.get("/docs")
-    assert response.status_code == 200
-    body = response.content.decode()
-    for name in EXPECTED_OPERATIONS:
-        assert name in body
-    assert "/openapi.json" in body
-
-
 def test_mutating_calls_log_actor_and_outcome(api, customer_api, redeemed, caplog):
     _, plaintext = redeemed
     with caplog.at_level(logging.INFO, logger="licenses.api"):

@@ -53,6 +53,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "django_tailwind_cli",
     "licenses",
 ]
 MIDDLEWARE = [
@@ -83,6 +84,12 @@ LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"
 USE_TZ = True
 STATIC_URL = "static/"
+STATICFILES_DIRS = [BASE_DIR / "assets"]
+STATIC_ROOT = BASE_DIR / "staticfiles"
+# Tailwind via django-tailwind-cli (standalone CLI, no Node). Source CSS lives
+# outside STATICFILES_DIRS so collectstatic never picks up `@import "tailwindcss"`.
+TAILWIND_CLI_VERSION = "4.3.3"
+TAILWIND_CLI_SRC_CSS = "src/styles.css"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # Password hash: PBKDF2-SHA256 (Django default). Sessions: server-side, stored
 # in the License Store DB (durable across restarts), cookie name "sessionid".

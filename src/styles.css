@@ -1,0 +1,44 @@
+@import "tailwindcss";
+
+@source "../licenses/templates";
+
+@layer base {
+  a {
+    @apply text-blue-700 underline;
+  }
+  h1 {
+    @apply mb-4 text-2xl font-semibold;
+  }
+  h2 {
+    @apply mt-6 mb-3 text-lg font-semibold;
+  }
+  label {
+    @apply mb-2 block;
+  }
+  input,
+  button {
+    @apply my-1 px-2.5 py-1.5 text-base;
+  }
+  input {
+    @apply box-border w-full rounded border border-neutral-300;
+  }
+  button {
+    @apply cursor-pointer rounded border border-neutral-300 bg-neutral-100 hover:bg-neutral-200;
+  }
+  table {
+    @apply w-full border-collapse;
+  }
+  th,
+  td {
+    @apply border border-neutral-300 px-2.5 py-1.5 text-left;
+  }
+  code {
+    @apply rounded bg-neutral-100 px-1 text-sm;
+  }
+}
+
+@layer components {
+  .error {
+    @apply my-2 rounded border border-red-300 bg-red-50 px-3 py-2;
+  }
+}

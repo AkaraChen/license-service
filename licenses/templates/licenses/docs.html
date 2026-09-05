@@ -7,6 +7,7 @@ contract is <a href="{% url 'openapi' %}"><code>/openapi.json</code></a>, genera
 from the same operation registry as this page. Failed calls return
 <code>{"error": class, "message": "..."}</code>.</p>
 <h2>Operations</h2>
+<div class="overflow-x-auto">
 <table>
   <tr><th>Operation</th><th>Method</th><th>Path</th><th>Auth</th><th>Body fields</th></tr>
   {% for op in operations %}
@@ -19,6 +20,7 @@ from the same operation registry as this page. Failed calls return
   </tr>
   {% endfor %}
 </table>
+</div>
 <h2>Error classes and HTTP status</h2>
 <table>
   <tr><th>Class</th><th>HTTP</th></tr>

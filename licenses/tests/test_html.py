@@ -29,6 +29,7 @@ def test_customer_pages_full_flow(db, customer, product):
 
     page = browser.get("/ui/register")
     assert page.status_code == 200
+    assert b"css/tailwind.css" in page.content
     response = browser.post("/ui/register", {"username": "carol", "password": "carol-pw-1"})
     assert response.status_code == 302  # registered and logged in
 

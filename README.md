@@ -11,8 +11,10 @@ document — all served by one process.
 uv sync
 uv run python manage.py migrate
 uv run python manage.py createsuperuser        # bootstrap: the only way to create an Admin (6.4)
-uv run python manage.py runserver "$LICENSE_LISTEN_HOST:$LICENSE_LISTEN_PORT"  # defaults 127.0.0.1:8000
+just serve                                     # migrate + Tailwind watcher + runserver (127.0.0.1:8000)
 ```
+
+Customer HTML pages use Tailwind CSS 4 via [django-tailwind-cli](https://github.com/django-commons/django-tailwind-cli) (standalone CLI, no Node). Source is `src/styles.css`; the compiled sheet is `assets/css/tailwind.css`. Rebuild with `just css`, or let `just serve` watch.
 
 Then open:
 
@@ -119,7 +121,8 @@ Everything else is thin presentation derived from the same registry/services.
 | `licenses/admin.py` | 89 | Presentation (Admin console config) |
 | `licenses/apps.py` | 26 | Startup preflight checks |
 | `config/`, `manage.py` | 118 | Standard Django project scaffolding |
-| `licenses/templates/` | 158 | HTML (Django templates) |
+| `licenses/templates/` | — | HTML (Django templates + Tailwind) |
+| `src/styles.css` | — | Tailwind source (compiled to `assets/css/tailwind.css`) |
 | `licenses/tests/` | 815 | pytest suite (not counted as core) |
 
 Reproduce: `scc --no-cocomo --no-size licenses/models.py licenses/services.py licenses/api.py`

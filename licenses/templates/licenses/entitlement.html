@@ -15,11 +15,11 @@
     <td>{{ d.bound_at }}</td>
     <td>
       {% if d.status == "bound" %}
-      <form method="post" action="{% url 'ui_unbind_device' device_id=d.pk %}" style="display:inline">
+      <form method="post" action="{% url 'ui_unbind_device' device_id=d.pk %}" class="inline">
         {% csrf_token %}<button>Unbind</button>
       </form>
-      <form method="post" action="{% url 'ui_rename_device' device_id=d.pk %}" style="display:inline">
-        {% csrf_token %}<input name="display_name" value="{{ d.display_name|default:'' }}" style="width:auto">
+      <form method="post" action="{% url 'ui_rename_device' device_id=d.pk %}" class="inline">
+        {% csrf_token %}<input name="display_name" value="{{ d.display_name|default:'' }}" class="w-auto">
         <button>Rename</button>
       </form>
       {% endif %}

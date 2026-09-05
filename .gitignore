@@ -3,3 +3,5 @@ __pycache__/
 *.sqlite3
 .pytest_cache/
 .venv/
+.django_tailwind_cli/
+staticfiles/

@@ -1,6 +1,7 @@
 # License Service
 #
-#   just serve        start locally (default 127.0.0.1:8000)
+#   just serve        start locally with Tailwind watcher (default 127.0.0.1:8000)
+#   just css          rebuild production CSS
 #   just superuser    bootstrap the only Admin account
 #   just test         run the pytest suite
 
@@ -27,9 +28,13 @@ superuser:
 check:
     uv run python manage.py check
 
-# Migrate and start the service
+# Production CSS build (standalone Tailwind CLI, no Node)
+css:
+    uv run python manage.py tailwind build
+
+# Migrate and start the service with a Tailwind watcher
 serve: migrate
-    uv run python manage.py runserver {{ host }}:{{ port }}
+    uv run python manage.py tailwind runserver {{ host }}:{{ port }}
 
 alias run := serve
 alias start := serve

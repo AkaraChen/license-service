@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}License Service{% endblock %}</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; color: #1a1a1a; }
+    input, button { font: inherit; padding: .45rem .6rem; margin: .2rem 0; }
+    input { width: 100%; box-sizing: border-box; }
+    button { cursor: pointer; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid #ccc; padding: .4rem .6rem; text-align: left; }
+    .error { background: #fee; border: 1px solid #c99; padding: .5rem .8rem; }
+    nav a { margin-right: .8rem; }
+    code { background: #f4f4f4; padding: 0 .25rem; }
+  </style>
+</head>
+<body>
+  <nav>
+    {% if user.is_authenticated %}
+      Signed in as <strong>{{ user.username }}</strong>
+      <a href="{% url 'ui_home' %}">My entitlements</a>
+      <a href="{% url 'ui_redeem' %}">Redeem a key</a>
+      <form method="post" action="{% url 'ui_logout' %}" style="display:inline">{% csrf_token %}<button>Log out</button></form>
+    {% else %}
+      <a href="{% url 'ui_login' %}">Log in</a>
+      <a href="{% url 'ui_register' %}">Register</a>
+    {% endif %}
+    <a href="{% url 'docs' %}">API docs</a>
+  </nav>
+  <hr>
+  {% block content %}{% endblock %}
+</body>
+</html>

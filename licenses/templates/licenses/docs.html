@@ -1,0 +1,27 @@
+{% extends "licenses/base.html" %}
+{% block title %}License Service API documentation{% endblock %}
+{% block content %}
+<h1>License Service API</h1>
+<p>Machine API under <code>/api</code>. JSON in, JSON out. The machine-readable
+contract is <a href="{% url 'openapi' %}"><code>/openapi.json</code></a>, generated
+from the same operation registry as this page. Failed calls return
+<code>{"error": class, "message": "..."}</code>.</p>
+<h2>Operations</h2>
+<table>
+  <tr><th>Operation</th><th>Method</th><th>Path</th><th>Auth</th><th>Body fields</th></tr>
+  {% for op in operations %}
+  <tr>
+    <td><code>{{ op.name }}</code></td>
+    <td>{{ op.method }}</td>
+    <td><code>{{ op.path }}</code></td>
+    <td>{{ op.auth }}</td>
+    <td>{% for n, kind, req in op.fields %}<code>{{ n }}</code>:{{ kind }}{% if req %} (required){% endif %}{% if not forloop.last %}, {% endif %}{% empty %}&mdash;{% endfor %}</td>
+  </tr>
+  {% endfor %}
+</table>
+<h2>Error classes and HTTP status</h2>
+<table>
+  <tr><th>Class</th><th>HTTP</th></tr>
+  {% for cls, code in errors %}<tr><td><code>{{ cls }}</code></td><td>{{ code }}</td></tr>{% endfor %}
+</table>
+{% endblock %}

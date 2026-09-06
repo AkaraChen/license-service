@@ -71,6 +71,48 @@ def test_customer_pages_full_flow(db, customer, product):
 def test_customer_pages_require_login(db):
     response = Client().get("/")
     assert response.status_code == 302 and "/ui/login" in response["Location"]
+    assert "next=/" in response["Location"]
+
+
+def test_login_returns_to_redeem_via_next(db, customer):
+    browser = Client()
+    bounced = browser.get("/ui/redeem")
+    assert bounced.status_code == 302
+    assert bounced["Location"] == "/ui/login?next=/ui/redeem"
+
+    form = browser.get(bounced["Location"])
+    assert form.status_code == 200
+    body = form.content.decode()
+    assert 'name="next"' in body and 'value="/ui/redeem"' in body
+    assert 'href="/ui/register?next=/ui/redeem"' in body
+
+    logged_in = browser.post("/ui/login", {"username": "alice", "password": ALICE_PW, "next": "/ui/redeem"})
+    assert logged_in.status_code == 302 and logged_in["Location"] == "/ui/redeem"
+    assert browser.get("/ui/redeem").status_code == 200
+
+
+def test_login_honors_redirect_query_and_rejects_unsafe_targets(db, customer):
+    browser = Client()
+    via_redirect = browser.post("/ui/login?redirect=/ui/redeem", {"username": "alice", "password": ALICE_PW})
+    assert via_redirect.status_code == 302 and via_redirect["Location"] == "/ui/redeem"
+
+    offsite = Client()
+    response = offsite.post(
+        "/ui/login", {"username": "alice", "password": ALICE_PW, "next": "https://evil.example/"}
+    )
+    assert response.status_code == 302 and response["Location"] == "/"
+
+    admin_target = Client()
+    response = admin_target.post("/ui/login", {"username": "alice", "password": ALICE_PW, "next": "/admin/"})
+    assert response.status_code == 302 and response["Location"] == "/"
+
+
+def test_register_returns_to_next(db):
+    browser = Client()
+    response = browser.post(
+        "/ui/register", {"username": "carol", "password": "carol-pw-1", "next": "/ui/redeem"}
+    )
+    assert response.status_code == 302 and response["Location"] == "/ui/redeem"
 
 
 def test_customer_pages_never_link_admin_console(db, customer, redeemed):

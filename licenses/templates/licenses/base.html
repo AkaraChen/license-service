@@ -19,8 +19,8 @@
         <a href="{% url 'ui_redeem' %}">{% trans "Redeem a key" %}</a>
         <form method="post" action="{% url 'ui_logout' %}" class="inline">{% csrf_token %}<button>{% trans "Log out" %}</button></form>
       {% else %}
-        <a href="{% url 'ui_login' %}">{% trans "Log in" %}</a>
-        <a href="{% url 'ui_register' %}">{% trans "Register" %}</a>
+        <a href="{% url 'ui_login' %}{% if next %}?next={{ next|urlencode }}{% endif %}">{% trans "Log in" %}</a>
+        <a href="{% url 'ui_register' %}{% if next %}?next={{ next|urlencode }}{% endif %}">{% trans "Register" %}</a>
       {% endif %}
     </nav>
     {% block content %}{% endblock %}

@@ -7,12 +7,30 @@ Django Admin at /admin/ and is never linked or exposed here.
 from django.contrib.auth import login, logout
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import redirect, render
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.translation import gettext as _
 from django.views.decorators.http import require_POST
 
 from . import services
 from .models import Device, Entitlement
 from .services import Failure
+
+
+def _safe_next(request):
+    """Return-to URL after login/register. Honors `next` (Django login_required)
+    and `redirect`. Rejects off-site and /admin targets."""
+    for key in ("next", "redirect"):
+        candidate = request.POST.get(key) or request.GET.get(key)
+        if not candidate:
+            continue
+        path = candidate.split("?", 1)[0]
+        if path.startswith("/admin") or path in {"/ui/login", "/ui/register"}:
+            continue
+        if url_has_allowed_host_and_scheme(
+            url=candidate, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+        ):
+            return candidate
+    return None
 
 
 def _fail(view):
@@ -28,27 +46,33 @@ def _fail(view):
 
 
 def register_page(request):
+    nxt = _safe_next(request)
+    if request.user.is_authenticated:
+        return redirect(nxt or "ui_home")
     if request.method == "POST":
         try:
             user = services.register_account(request.POST.get("username"), request.POST.get("password"))
         except Failure as exc:
-            return render(request, "licenses/register.html", {"error": exc.message})
+            return render(request, "licenses/register.html", {"error": exc.message, "next": nxt})
         login(request, user)
-        return redirect("ui_home")
-    return render(request, "licenses/register.html")
+        return redirect(nxt or "ui_home")
+    return render(request, "licenses/register.html", {"next": nxt})
 
 
 def login_page(request):
+    nxt = _safe_next(request)
+    if request.user.is_authenticated:
+        return redirect(nxt or "ui_home")
     if request.method == "POST":
         try:
             user = services.authenticate_account(
                 request, request.POST.get("username"), request.POST.get("password")
             )
         except Failure as exc:
-            return render(request, "licenses/login.html", {"error": exc.message})
+            return render(request, "licenses/login.html", {"error": exc.message, "next": nxt})
         login(request, user)
-        return redirect("ui_home")
-    return render(request, "licenses/login.html")
+        return redirect(nxt or "ui_home")
+    return render(request, "licenses/login.html", {"next": nxt})
 
 
 @require_POST

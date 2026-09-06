@@ -84,7 +84,7 @@ MIDDLEWARE = [
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "licenses.middleware.RequestIdMiddleware",
-    "licenses.middleware.JsonWritePolicyMiddleware",
+    "licenses.middleware.SameOriginCookieWriteMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django_ratelimit.middleware.RatelimitMiddleware",
     "axes.middleware.AxesMiddleware",

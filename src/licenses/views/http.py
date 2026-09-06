@@ -10,26 +10,7 @@ from ninja.security import SessionAuth
 from redis.exceptions import RedisError
 
 from .. import audit
-from ..services import Failure
-
-HTTP_STATUS = {
-    "validation_error": 400,
-    "unauthenticated": 401,
-    "forbidden": 403,
-    "not_found": 404,
-    "unknown_key": 404,
-    "unknown_device": 404,
-    "conflict": 409,
-    "already_entitled": 409,
-    "key_already_redeemed": 409,
-    "key_revoked": 409,
-    "seat_exhausted": 409,
-    "entitlement_suspended": 409,
-    "entitlement_revoked": 409,
-    "entitlement_expired": 409,
-    "rate_limited": 429,
-    "store_unavailable": 503,
-}
+from ..services import HTTP_STATUS, Failure
 
 
 class LicenseAPI(NinjaAPI):
@@ -53,36 +34,52 @@ customer_session = SessionAuth(csrf=False)
 admin_session = AdminSession(csrf=False)
 
 
-def api_error(request, exc):
-    if isinstance(exc, Failure):
-        error, message = exc.error, exc.message
-    elif isinstance(exc, AuthenticationError):
-        error, message = "unauthenticated", "A session cookie is required."
-    elif isinstance(exc, Http404):
-        error, message = "not_found", "Not found."
-    elif isinstance(exc, (OperationalError, RedisError)):
-        error, message = "store_unavailable", "The license store is unavailable."
-    elif isinstance(exc, IntegrityError):
-        error, message = "conflict", "The requested change conflicts with existing data."
-    elif isinstance(exc, Ratelimited):
-        error, message = "rate_limited", "Registration limit reached. Please try again later."
-    else:
-        error, message = "validation_error", "The request body is invalid or too large."
+def envelope(request, error, message):
     audit.resources(request, outcome=error)
     return JsonResponse({"error": error, "message": message}, status=HTTP_STATUS[error])
 
 
-for exception in (
-    Failure,
-    Http404,
-    OperationalError,
-    RedisError,
-    IntegrityError,
-    Ratelimited,
-    DataError,
-    RequestDataTooBig,
-    UnicodeError,
-    ValidationError,
-    HttpError,
-):
-    api.add_exception_handler(exception, api_error)
+def api_error(request, exc):
+    """Same envelope as exception handlers; used by same-origin middleware."""
+    return envelope(request, exc.error, exc.message)
+
+
+@api.exception_handler(HttpError)
+def http_error(request, exc):
+    if isinstance(exc, Failure):
+        return envelope(request, exc.error, exc.message)
+    return envelope(request, "validation_error", "The request body is invalid or too large.")
+
+
+@api.exception_handler(AuthenticationError)
+def unauthenticated(request, exc):
+    return envelope(request, "unauthenticated", "A session cookie is required.")
+
+
+@api.exception_handler(Http404)
+def not_found(request, exc):
+    return envelope(request, "not_found", "Not found.")
+
+
+@api.exception_handler(IntegrityError)
+def conflict(request, exc):
+    return envelope(request, "conflict", "The requested change conflicts with existing data.")
+
+
+@api.exception_handler(OperationalError)
+@api.exception_handler(RedisError)
+def store_unavailable(request, exc):
+    return envelope(request, "store_unavailable", "The license store is unavailable.")
+
+
+@api.exception_handler(Ratelimited)
+def rate_limited(request, exc):
+    return envelope(request, "rate_limited", "Registration limit reached. Please try again later.")
+
+
+@api.exception_handler(ValidationError)
+@api.exception_handler(DataError)
+@api.exception_handler(RequestDataTooBig)
+@api.exception_handler(UnicodeError)
+def invalid_request(request, exc):
+    return envelope(request, "validation_error", "The request body is invalid or too large.")

@@ -9,6 +9,7 @@ import time
 from django.db import OperationalError, transaction
 from django.utils import timezone
 from django.utils.translation import gettext
+from ninja.errors import HttpError
 
 from .models import Entitlement, LicenseKey
 
@@ -17,13 +18,32 @@ FINGERPRINT_MAX_LENGTH = 128
 _KEY_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789"  # 32 chars from 29 symbols: ~155 bits (4.1.3)
 
 
-class Failure(Exception):
+HTTP_STATUS = {
+    "validation_error": 400,
+    "unauthenticated": 401,
+    "forbidden": 403,
+    "not_found": 404,
+    "unknown_key": 404,
+    "unknown_device": 404,
+    "conflict": 409,
+    "already_entitled": 409,
+    "key_already_redeemed": 409,
+    "key_revoked": 409,
+    "seat_exhausted": 409,
+    "entitlement_suspended": 409,
+    "entitlement_revoked": 409,
+    "entitlement_expired": 409,
+    "rate_limited": 429,
+    "store_unavailable": 503,
+}
+
+
+class Failure(HttpError):
     """One SPEC Section 14.1 error class plus a human-readable message."""
 
     def __init__(self, error, message):
-        super().__init__(message)
         self.error = error
-        self.message = message
+        super().__init__(HTTP_STATUS[error], message)
 
 
 def hash_key(plaintext):

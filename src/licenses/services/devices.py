@@ -33,7 +33,10 @@ def normalize_fingerprint(raw):
 def bind(entitlement, raw_fingerprint, display_name=None, *, source_key_id=None):
     """Section 7.5. Returns (device, created); same fingerprint is idempotent."""
     fp = normalize_fingerprint(raw_fingerprint)
-    display_name = normalize_display_name(display_name)
+    if display_name == "":
+        raise Failure("validation_error", gettext("display_name must not be empty."))
+    if display_name is not None:
+        validate_text(display_name)
 
     def work():
         if source_key_id is not None:
@@ -100,15 +103,11 @@ def validate(plaintext, raw_fingerprint):
     return device
 
 
-def normalize_display_name(value):
-    if value is not None:
-        validate_text(value)
-        if len(value) > 200:
-            raise Failure("validation_error", "display_name exceeds 200 characters.")
-    return value or None
-
-
 def rename_device(device, display_name):
-    device.display_name = normalize_display_name(display_name)
+    if display_name == "":
+        raise Failure("validation_error", gettext("display_name must not be empty."))
+    if display_name is not None:
+        validate_text(display_name)
+    device.display_name = display_name
     device.save(update_fields=("display_name",))
     return device

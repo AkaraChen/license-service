@@ -6,6 +6,7 @@ and validates with ``openapi-spec-validator``, so invalid constructs such as
 status ``200/201`` cannot be emitted.
 """
 
+from .adapt import Schema, adapt, dump_model, envelope
 from .builder import OpenAPIBuilder
 from .errors import OpenAPIBuildError
 from .fields import FieldKind, kind_schema, status_key
@@ -15,6 +16,10 @@ __all__ = [
     "FieldKind",
     "OpenAPIBuildError",
     "OpenAPIBuilder",
+    "Schema",
+    "adapt",
+    "dump_model",
+    "envelope",
     "kind_schema",
     "status_key",
     "validate_openapi",

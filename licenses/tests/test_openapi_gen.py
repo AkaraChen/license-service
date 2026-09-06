@@ -1,9 +1,11 @@
 """openapi_gen rejects illegal OpenAPI and emits documents the official schema accepts."""
 
-import pytest
-from pydantic import BaseModel
+from types import SimpleNamespace
 
-from openapi_gen import OpenAPIBuilder, OpenAPIBuildError, status_key, validate_openapi
+import pytest
+from pydantic import BaseModel, Field
+
+from openapi_gen import OpenAPIBuilder, OpenAPIBuildError, Schema, adapt, status_key, validate_openapi
 
 
 class Ping(BaseModel):
@@ -59,3 +61,37 @@ def test_build_passes_official_openapi_31_schema():
     assert set(body["properties"]) == {"name", "note"}
     assert document["paths"]["/items/{id}"]["post"]["parameters"][0]["required"] is True
     assert "Ping" in document["components"]["schemas"]
+
+
+class _Row(Schema):
+    row_id: int = Field(validation_alias="pk")
+    name: str
+
+
+class _RowOut(Schema):
+    item: _Row
+    ok: bool = True
+
+
+def test_adapt_wraps_orm_like_object_from_model_attributes():
+    row = SimpleNamespace(pk=7, name="demo")
+    dumped = adapt(_RowOut, row).model_dump()
+    assert dumped == {"item": {"row_id": 7, "name": "demo"}, "ok": True}
+
+
+def test_adapt_wraps_list_in_the_required_field():
+    class _List(Schema):
+        items: list[_Row]
+
+    rows = [SimpleNamespace(pk=1, name="a"), SimpleNamespace(pk=2, name="b")]
+    dumped = adapt(_List, rows).model_dump()
+    assert dumped == {"items": [{"row_id": 1, "name": "a"}, {"row_id": 2, "name": "b"}]}
+
+
+def test_adapt_accepts_dict_for_multi_field_models():
+    class _Issued(Schema):
+        item: _Row
+        token: str
+
+    dumped = adapt(_Issued, {"item": SimpleNamespace(pk=1, name="k"), "token": "lic_x"}).model_dump()
+    assert dumped == {"item": {"row_id": 1, "name": "k"}, "token": "lic_x"}

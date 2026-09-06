@@ -1,221 +1,76 @@
-"""Pydantic response models. Handlers return these; OpenAPI is derived from them."""
+"""Response schemas derived from Django models. Handlers return ORM rows;
+``openapi_gen.adapt`` wraps them. OpenAPI uses the same models."""
 
-from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from django.contrib.auth.models import User
 
+from openapi_gen.adapt import envelope
+from openapi_gen.orm import entity
 
-class Schema(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+from .models import Device, Entitlement, LicenseKey, Product
 
+ErrorBody = envelope("ErrorBody", error=str, message=str)
 
-class ErrorBody(Schema):
-    error: str
-    message: str
+Account = entity(
+    "Account",
+    User,
+    account_id="pk",
+    username=True,
+    is_admin="is_staff",
+    email=str | None,
+    created_at="date_joined",
+)
+Product = entity("Product", Product, product_id="pk", code=True, name=True, created_at=True)
+LicenseKey = entity(
+    "LicenseKey",
+    LicenseKey,
+    key_id="pk",
+    product_id=True,
+    key_prefix=True,
+    max_devices=True,
+    expires_at=True,
+    status=True,
+    redeemed_by_account_id="redeemed_by_id",
+    created_at=True,
+)
+Entitlement = entity(
+    "Entitlement",
+    Entitlement,
+    entitlement_id="pk",
+    account_id=True,
+    product_id=True,
+    max_devices=True,
+    expires_at=True,
+    status=True,
+    source_key_id=True,
+    created_at=True,
+)
+Device = entity(
+    "Device",
+    Device,
+    device_id="pk",
+    entitlement_id=True,
+    device_fingerprint=True,
+    display_name=True,
+    bound_at=True,
+    status=True,
+)
 
+AccountResponse = envelope("AccountResponse", account=Account)
+ProductResponse = envelope("ProductResponse", product=Product)
+LicenseKeyResponse = envelope("LicenseKeyResponse", key=LicenseKey)
+EntitlementResponse = envelope("EntitlementResponse", entitlement=Entitlement)
+DeviceResponse = envelope("DeviceResponse", device=Device)
+AccountList = envelope("AccountList", accounts=list[Account])
+ProductList = envelope("ProductList", products=list[Product])
+LicenseKeyList = envelope("LicenseKeyList", license_keys=list[LicenseKey])
+EntitlementList = envelope("EntitlementList", entitlements=list[Entitlement])
+DeviceList = envelope("DeviceList", devices=list[Device])
+IssuedLicenseKey = envelope("IssuedLicenseKey", key=LicenseKey, license_key=str)
+Ok = envelope("Ok", ok=(Literal[True], True))
+ValidateResponse = envelope("ValidateResponse", valid=(Literal[True], True), device=Device)
 
-class Account(Schema):
-    account_id: int
-    username: str
-    is_admin: bool
-    email: str | None
-    created_at: datetime
-
-    @classmethod
-    def from_row(cls, user):
-        return cls(
-            account_id=user.pk,
-            username=user.username,
-            is_admin=user.is_staff,
-            email=user.email or None,
-            created_at=user.date_joined,
-        )
-
-
-class Product(Schema):
-    product_id: int
-    code: str
-    name: str
-    created_at: datetime
-
-    @classmethod
-    def from_row(cls, product):
-        return cls(product_id=product.pk, code=product.code, name=product.name, created_at=product.created_at)
-
-
-class LicenseKey(Schema):
-    key_id: int
-    product_id: int
-    key_prefix: str
-    max_devices: int
-    expires_at: datetime | None
-    status: Literal["issued", "redeemed", "revoked"]
-    redeemed_by_account_id: int | None
-    created_at: datetime
-
-    @classmethod
-    def from_row(cls, key):
-        return cls(
-            key_id=key.pk,
-            product_id=key.product_id,
-            key_prefix=key.key_prefix,
-            max_devices=key.max_devices,
-            expires_at=key.expires_at,
-            status=key.status,
-            redeemed_by_account_id=key.redeemed_by_id,
-            created_at=key.created_at,
-        )
-
-
-class Entitlement(Schema):
-    entitlement_id: int
-    account_id: int
-    product_id: int
-    max_devices: int
-    expires_at: datetime | None
-    status: Literal["active", "suspended", "revoked"]
-    source_key_id: int
-    created_at: datetime
-
-    @classmethod
-    def from_row(cls, entitlement):
-        return cls(
-            entitlement_id=entitlement.pk,
-            account_id=entitlement.account_id,
-            product_id=entitlement.product_id,
-            max_devices=entitlement.max_devices,
-            expires_at=entitlement.expires_at,
-            status=entitlement.status,
-            source_key_id=entitlement.source_key_id,
-            created_at=entitlement.created_at,
-        )
-
-
-class Device(Schema):
-    device_id: int
-    entitlement_id: int
-    device_fingerprint: str
-    display_name: str | None
-    bound_at: datetime
-    status: Literal["bound", "unbound"]
-
-    @classmethod
-    def from_row(cls, device):
-        return cls(
-            device_id=device.pk,
-            entitlement_id=device.entitlement_id,
-            device_fingerprint=device.device_fingerprint,
-            display_name=device.display_name,
-            bound_at=device.bound_at,
-            status=device.status,
-        )
-
-
-class AccountResponse(Schema):
-    account: Account
-
-    @classmethod
-    def from_row(cls, user):
-        return cls(account=Account.from_row(user))
-
-
-class ProductResponse(Schema):
-    product: Product
-
-    @classmethod
-    def from_row(cls, product):
-        return cls(product=Product.from_row(product))
-
-
-class LicenseKeyResponse(Schema):
-    key: LicenseKey
-
-    @classmethod
-    def from_row(cls, key):
-        return cls(key=LicenseKey.from_row(key))
-
-
-class EntitlementResponse(Schema):
-    entitlement: Entitlement
-
-    @classmethod
-    def from_row(cls, entitlement):
-        return cls(entitlement=Entitlement.from_row(entitlement))
-
-
-class DeviceResponse(Schema):
-    device: Device
-
-    @classmethod
-    def from_row(cls, device):
-        return cls(device=Device.from_row(device))
-
-
-class AccountList(Schema):
-    accounts: list[Account]
-
-    @classmethod
-    def from_rows(cls, rows):
-        return cls(accounts=[Account.from_row(row) for row in rows])
-
-
-class ProductList(Schema):
-    products: list[Product]
-
-    @classmethod
-    def from_rows(cls, rows):
-        return cls(products=[Product.from_row(row) for row in rows])
-
-
-class LicenseKeyList(Schema):
-    license_keys: list[LicenseKey]
-
-    @classmethod
-    def from_rows(cls, rows):
-        return cls(license_keys=[LicenseKey.from_row(row) for row in rows])
-
-
-class EntitlementList(Schema):
-    entitlements: list[Entitlement]
-
-    @classmethod
-    def from_rows(cls, rows):
-        return cls(entitlements=[Entitlement.from_row(row) for row in rows])
-
-
-class DeviceList(Schema):
-    devices: list[Device]
-
-    @classmethod
-    def from_rows(cls, rows):
-        return cls(devices=[Device.from_row(row) for row in rows])
-
-
-class IssuedLicenseKey(Schema):
-    key: LicenseKey
-    license_key: str
-
-    @classmethod
-    def from_issue(cls, key, plaintext):
-        return cls(key=LicenseKey.from_row(key), license_key=plaintext)
-
-
-class Ok(Schema):
-    ok: Literal[True] = True
-
-
-class ValidateResponse(Schema):
-    valid: Literal[True] = True
-    device: Device
-
-    @classmethod
-    def from_row(cls, device):
-        return cls(device=Device.from_row(device))
-
-
-# Success status -> model for each Section 11 operation. Handlers return these
-# models; OpenAPI is generated from the same table.
 RESPONSES = {
     "register": {201: AccountResponse},
     "login": {200: AccountResponse},

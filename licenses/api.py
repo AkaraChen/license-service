@@ -1,6 +1,6 @@
 """JSON machine API (SPEC 5, 11). The OPERATIONS registry is the single source
-for URL patterns, validation, and OpenAPI (Section 12). Handlers return Pydantic
-models from schemas.py. Error envelope (5.3); session cookie auth."""
+for URL patterns, validation, and OpenAPI (Section 12). Handlers return ORM
+rows; schemas.py / openapi_gen dump them. Error envelope (5.3); session cookie."""
 
 import json
 import logging
@@ -13,7 +13,8 @@ from django.http import JsonResponse
 from django.urls import path
 from django.utils.dateparse import parse_datetime
 from django.views.decorators.csrf import csrf_exempt
-from pydantic import BaseModel
+
+from openapi_gen import dump_model
 
 from . import schemas, services
 from .models import Device, Entitlement, LicenseKey, Product
@@ -43,14 +44,9 @@ def op(name, method, op_path, auth, fields=()):
     return register
 
 
-def _dump(payload):
-    return payload.model_dump(mode="json") if isinstance(payload, BaseModel) else payload
-
-
 def _error(error, message, status=None):
-    return JsonResponse(
-        schemas.ErrorBody(error=error, message=message).model_dump(), status=status or HTTP_STATUS[error]
-    )
+    body = dump_model(schemas.ErrorBody, {"error": error, "message": message})
+    return JsonResponse(body, status=status or HTTP_STATUS[error])
 
 
 def parse_body(request, fields):
@@ -95,7 +91,7 @@ def dispatch(request, op_path, **path_params):
     by_method = _BY_PATH[op_path]
     if request.method not in by_method:
         return _error("validation_error", "Method not allowed.", 405)
-    name, _, _, auth, fields, handler, _ = by_method[request.method]
+    name, _, _, auth, fields, handler, responses = by_method[request.method]
     ctx = {"actor": "anonymous", "rid": request.headers.get("X-Request-ID", uuid.uuid4().hex[:12])}
     try:
         user = request.user
@@ -108,7 +104,7 @@ def dispatch(request, op_path, **path_params):
         payload, status = handler(request, parse_body(request, fields), ctx, **path_params)
         ctx["outcome"] = "success"
         _audit(name, ctx)
-        return JsonResponse(_dump(payload), status=status)
+        return JsonResponse(dump_model(responses[status], payload), status=status)
     except (Failure, OperationalError) as exc:
         error = exc.error if isinstance(exc, Failure) else "store_unavailable"
         message = exc.message if isinstance(exc, Failure) else "The license store is unavailable."
@@ -141,21 +137,19 @@ def _mine(model, pk, user):
     return obj
 
 
-def _list_op(name, op_path, auth, model, response):
-    op(name, "GET", op_path, auth)(
-        lambda request, data, ctx: (response.from_rows(model.objects.order_by("pk")), 200)
-    )
+def _list_op(name, op_path, auth, model):
+    op(name, "GET", op_path, auth)(lambda request, data, ctx: (model.objects.order_by("pk"), 200))
 
 
-def _get_op(name, op_path, auth, model, response):
-    op(name, "GET", op_path, auth)(lambda request, data, ctx, pk: (response.from_row(_get(model, pk)), 200))
+def _get_op(name, op_path, auth, model):
+    op(name, "GET", op_path, auth)(lambda request, data, ctx, pk: (_get(model, pk), 200))
 
 
 @op("register", "POST", "auth/register", "anonymous", (("username", "str", True), ("password", "str", True)))
 def register(request, data, ctx):
     user = services.register_account(data["username"], data["password"])
     ctx.update(actor="customer", account_id=user.pk)
-    return schemas.AccountResponse.from_row(user), 201
+    return user, 201
 
 
 @op("login", "POST", "auth/login", "anonymous", (("username", "str", True), ("password", "str", True)))
@@ -163,13 +157,13 @@ def login_op(request, data, ctx):
     user = services.authenticate_account(request, data["username"], data["password"])
     login(request, user)
     ctx.update(actor="admin" if user.is_staff else "customer", account_id=user.pk)
-    return schemas.AccountResponse.from_row(user), 200
+    return user, 200
 
 
 @op("logout", "POST", "auth/logout", "session")
 def logout_op(request, data, ctx):
     logout(request)
-    return schemas.Ok(), 200
+    return None, 200
 
 
 @op("create_product", "POST", "products", "admin", (("code", "str", True), ("name", "str", True)))
@@ -181,7 +175,7 @@ def create_product(request, data, ctx):
         raise Failure("conflict", "A product with this code already exists.")
     product = Product.objects.create(code=code, name=data["name"])
     ctx["product_id"] = product.pk
-    return schemas.ProductResponse.from_row(product), 201
+    return product, 201
 
 
 @op("update_product", "PATCH", "products/{pk}", "admin", (("name", "str", False),))  # code never changes
@@ -191,7 +185,7 @@ def update_product(request, data, ctx, pk):
         product.name = data["name"]
         product.save(update_fields=("name",))
     ctx["product_id"] = product.pk
-    return schemas.ProductResponse.from_row(product), 200
+    return product, 200
 
 
 @op(
@@ -205,14 +199,14 @@ def issue_license_key(request, data, ctx):
     product = _get(Product, data["product_id"])
     key, plaintext = services.issue_key(product, data["max_devices"], data.get("expires_at"))
     ctx["product_id"] = product.pk
-    return schemas.IssuedLicenseKey.from_issue(key, plaintext), 201  # plaintext returned once, here only
+    return {"key": key, "license_key": plaintext}, 201  # plaintext returned once, here only
 
 
 @op("revoke_license_key", "POST", "license-keys/{pk}/revoke", "admin")
 def revoke_license_key(request, data, ctx, pk):
     key = services.revoke_key(_get(LicenseKey, pk))
     ctx["product_id"] = key.product_id
-    return schemas.LicenseKeyResponse.from_row(key), 200
+    return key, 200
 
 
 @op("set_entitlement_status", "POST", "entitlements/{pk}/status", "admin", (("status", "str", True),))
@@ -223,45 +217,45 @@ def set_entitlement_status(request, data, ctx, pk):  # max_devices/expires_at ar
     entitlement.status = data["status"]
     entitlement.save(update_fields=("status",))
     ctx.update(product_id=entitlement.product_id, entitlement_id=entitlement.pk)
-    return schemas.EntitlementResponse.from_row(entitlement), 200
+    return entitlement, 200
 
 
 @op("unbind_device", "POST", "devices/{pk}/unbind", "admin")
 def unbind_device(request, data, ctx, pk):
     device = services.unbind(_get(Device, pk))
     ctx.update(entitlement_id=device.entitlement_id, device_id=device.pk)
-    return schemas.DeviceResponse.from_row(device), 200
+    return device, 200
 
 
-_list_op("list_products", "products", "admin", Product, schemas.ProductList)
-_list_op("list_license_keys", "license-keys", "admin", LicenseKey, schemas.LicenseKeyList)
-_list_op("list_accounts", "accounts", "admin", User, schemas.AccountList)
-_list_op("list_entitlements", "entitlements", "admin", Entitlement, schemas.EntitlementList)
-_list_op("list_devices", "devices", "admin", Device, schemas.DeviceList)
-_get_op("get_product", "products/{pk}", "admin", Product, schemas.ProductResponse)
-_get_op("get_account", "accounts/{pk}", "admin", User, schemas.AccountResponse)
+_list_op("list_products", "products", "admin", Product)
+_list_op("list_license_keys", "license-keys", "admin", LicenseKey)
+_list_op("list_accounts", "accounts", "admin", User)
+_list_op("list_entitlements", "entitlements", "admin", Entitlement)
+_list_op("list_devices", "devices", "admin", Device)
+_get_op("get_product", "products/{pk}", "admin", Product)
+_get_op("get_account", "accounts/{pk}", "admin", User)
 
 
 @op("redeem_license_key", "POST", "me/redeem", "session", (("license_key", "str", True),))
 def redeem_license_key(request, data, ctx):
     entitlement, created = services.redeem(request.user, data["license_key"])
     ctx.update(product_id=entitlement.product_id, entitlement_id=entitlement.pk)
-    return schemas.EntitlementResponse.from_row(entitlement), 201 if created else 200
+    return entitlement, 201 if created else 200
 
 
 @op("list_my_entitlements", "GET", "me/entitlements", "session")
 def list_my_entitlements(request, data, ctx):
-    return schemas.EntitlementList.from_rows(request.user.entitlements.order_by("pk")), 200
+    return request.user.entitlements.order_by("pk"), 200
 
 
 @op("get_my_entitlement", "GET", "me/entitlements/{pk}", "session")
 def get_my_entitlement(request, data, ctx, pk):
-    return schemas.EntitlementResponse.from_row(_mine(Entitlement, pk, request.user)), 200
+    return _mine(Entitlement, pk, request.user), 200
 
 
 @op("list_my_devices", "GET", "me/entitlements/{pk}/devices", "session")
 def list_my_devices(request, data, ctx, pk):
-    return schemas.DeviceList.from_rows(_mine(Entitlement, pk, request.user).devices.order_by("pk")), 200
+    return _mine(Entitlement, pk, request.user).devices.order_by("pk"), 200
 
 
 @op(
@@ -275,14 +269,14 @@ def bind_my_device(request, data, ctx, pk):
     entitlement = _mine(Entitlement, pk, request.user)
     device, created = services.bind(entitlement, data["device_fingerprint"], data.get("display_name"))
     ctx.update(product_id=entitlement.product_id, entitlement_id=entitlement.pk, device_id=device.pk)
-    return schemas.DeviceResponse.from_row(device), 201 if created else 200
+    return device, 201 if created else 200
 
 
 @op("unbind_my_device", "POST", "me/devices/{pk}/unbind", "session")
 def unbind_my_device(request, data, ctx, pk):
     device = services.unbind(_mine(Device, pk, request.user))
     ctx.update(entitlement_id=device.entitlement_id, device_id=device.pk)
-    return schemas.DeviceResponse.from_row(device), 200
+    return device, 200
 
 
 @op("set_my_device_display_name", "PATCH", "me/devices/{pk}", "session", (("display_name", "str?", True),))
@@ -291,7 +285,7 @@ def set_my_device_display_name(request, data, ctx, pk):
     device.display_name = data["display_name"]
     device.save(update_fields=("display_name",))
     ctx.update(entitlement_id=device.entitlement_id, device_id=device.pk)
-    return schemas.DeviceResponse.from_row(device), 200
+    return device, 200
 
 
 @op(
@@ -306,7 +300,7 @@ def activate_device(request, data, ctx):
     _, entitlement = services.resolve_redeemed_key(data["license_key"])
     device, created = services.bind(entitlement, data["device_fingerprint"], data.get("display_name"))
     ctx.update(product_id=entitlement.product_id, entitlement_id=entitlement.pk, device_id=device.pk)
-    return schemas.DeviceResponse.from_row(device), 201 if created else 200
+    return device, 201 if created else 200
 
 
 @op(
@@ -320,7 +314,7 @@ def validate_device(request, data, ctx):
     ctx["actor"] = "application"
     device = services.validate(data["license_key"], data["device_fingerprint"])
     ctx.update(entitlement_id=device.entitlement_id, device_id=device.pk)
-    return schemas.ValidateResponse.from_row(device), 200
+    return device, 200
 
 
 _BY_PATH = {}

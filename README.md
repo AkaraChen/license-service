@@ -109,21 +109,20 @@ blank lines excluded).
 
 The auditable core — entities and invariants (`models.py`), the Section 7 state
 machines (`services.py`), and the HTTP contract with validation, authorization, and
-audit logging (`api.py`) — stays within the 500-line budget. Everything else is
-thin presentation derived from the same registry, Pydantic response models, and
-services. Handlers return those models; `openapi_gen` builds an OpenAPI 3.1
-document and validates it against the official schema (so constructs like
-`200/201` cannot be served).
+audit logging (`api.py`) — stays within the 500-line budget. Handlers return ORM
+rows (or a queryset); `openapi_gen.entity` derives Pydantic types from the Django
+model, and `adapt` wraps the row in the declared envelope. The same models feed
+the OpenAPI 3.1 document, which is validated against the official schema.
 
 | File | Code lines (scc) | Layer |
 | --- | --- | --- |
 | `licenses/models.py` | 47 | Persistence (entities, uniqueness invariants) |
 | `licenses/services.py` | 140 | Policy (redeem/bind/unbind/validate, seats) |
-| `licenses/api.py` | 260 | Coordination (25 ops, validation, authz, logging) |
-| **core subtotal** | **447** | |
-| `licenses/schemas.py` | 181 | Presentation (Pydantic response models) |
+| `licenses/api.py` | 255 | Coordination (25 ops, validation, authz, logging) |
+| **core subtotal** | **442** | |
+| `licenses/schemas.py` | 90 | Presentation (field allow-lists on Django models) |
 | `licenses/openapi.py` | 43 | Presentation (OpenAPI from the registry + models) |
-| `openapi_gen/` | 211 | OpenAPI 3.1 builder + official spec validation |
+| `openapi_gen/` | 296 | OpenAPI 3.1 builder, ORM→schema, official validation |
 | `licenses/views_ui.py` | 109 | Presentation (Customer HTML pages) |
 | `licenses/admin.py` | 120 | Presentation (Admin console config) |
 | `licenses/apps.py` | 23 | Startup preflight checks |
@@ -137,7 +136,7 @@ Reproduce: `scc --no-cocomo --no-size licenses/models.py licenses/services.py li
 ## Tests
 
 ```bash
-uv run pytest                 # 92 tests
+uv run pytest                 # 95 tests
 uv run ruff format --check . && uv run ruff check .   # style and lint gates
 ```
 
@@ -158,7 +157,7 @@ Tests, organized by SPEC Section 17:
   the registry, and validates against the official OpenAPI 3.1 schema; audit logs
   carry `actor`/`outcome`/`rid` and never secrets.
 - `test_openapi_gen.py` — the OpenAPI builder rejects illegal status keys such as
-  `200/201` and only emits documents the official schema accepts.
+  `200/201`; `adapt` wraps ORM-like objects from model attributes.
 - `test_html.py` — 17.8: Admin console gating, Customer page flow
   (register → redeem → bind → unbind), no Admin console exposure, plaintext shown once.
 - `test_config.py` — 17.8: `config_invalid` and unreachable store prevent startup.

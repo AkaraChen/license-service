@@ -18,6 +18,11 @@ class Entitlement(models.Model):
     source_key = models.OneToOneField(LicenseKey, on_delete=models.PROTECT, related_name="entitlement")
     created_at = models.DateTimeField(auto_now_add=True)
 
+    @property
+    def seats_available(self):
+        bound = self.devices.filter(status="bound").count()
+        return max(0, self.max_devices - bound)
+
     class Meta:
         # Invariant 1: at most one Entitlement per (account_id, product_id).
         constraints = [

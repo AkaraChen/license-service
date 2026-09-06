@@ -2,7 +2,7 @@
 
 import re
 
-from django.test import Client
+from django.test import Client, override_settings
 
 from licenses import services
 from licenses.models import Entitlement, LicenseKey
@@ -134,8 +134,9 @@ def test_customer_cannot_open_foreign_entitlement_page(db, customer, other_custo
     bob_browser.post(
         "/api/auth/login", {"username": "bob", "password": "bob-pw-123"}, content_type="application/json"
     )
-    response = bob_browser.get(f"/ui/entitlements/{entitlement.pk}")
-    assert response.status_code == 400  # error page, no data leaked
+    with override_settings(DEBUG=False):
+        response = bob_browser.get(f"/ui/entitlements/{entitlement.pk}")
+    assert response.status_code == 404  # error page, no data leaked
     assert b"Not found" in response.content
 
 

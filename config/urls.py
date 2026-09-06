@@ -1,6 +1,8 @@
 from django.contrib import admin
 from django.contrib.auth.views import LogoutView
+from django.shortcuts import render
 from django.urls import path
+from django.utils.translation import gettext as _
 
 from licenses.views import api, customer
 
@@ -16,3 +18,7 @@ urlpatterns = [
     path("ui/devices/<int:device_id>/rename", customer.rename_page, name="ui_rename_device"),
     path("", api.api.urls),
 ]
+
+
+def handler404(request, exception):
+    return render(request, "licenses/error.html", {"error": _("Not found.")}, status=404)

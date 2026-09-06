@@ -8,11 +8,9 @@ Django Admin at /admin/ and is never linked or exposed here.
 from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import LoginView
-from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.response import TemplateResponse
 from django.utils.http import url_has_allowed_host_and_scheme
-from django.utils.translation import gettext as _
 from django.views.decorators.http import require_GET, require_POST
 
 from .. import accounts, audit, services
@@ -44,10 +42,9 @@ def _fail(view):
     def wrapped(request, *args, **kwargs):
         try:
             return view(request, *args, **kwargs)
-        except (Failure, Http404) as exc:
-            error = exc.message if isinstance(exc, Failure) else _("Not found.")
-            audit.resources(request, outcome=exc.error if isinstance(exc, Failure) else "not_found")
-            return render(request, "licenses/error.html", {"error": error}, status=400)
+        except Failure as exc:
+            audit.resources(request, outcome=exc.error)
+            return render(request, "licenses/error.html", {"error": exc.message}, status=400)
 
     return wrapped
 

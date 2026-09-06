@@ -62,7 +62,7 @@ def register_page(request):
             form.add_error(None, exc.message)
         else:
             audit.resources(request, actor="customer", account_id=user.pk)
-            login(request, user, backend="licenses.accounts.CaseInsensitiveBackend")
+            login(request, user, backend="django.contrib.auth.backends.ModelBackend")
             return redirect(nxt or "ui_home")
     return TemplateResponse(request, "licenses/register.html", {"form": form, "next": nxt})
 

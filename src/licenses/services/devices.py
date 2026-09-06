@@ -1,90 +1,13 @@
-"""License policy and shared validation/transaction helpers (SPEC 7, 16).
-Account registration and authentication live in accounts.py.
-"""
-
-import hashlib
-import secrets
-
 from django.db import transaction
 from django.utils import timezone
 from django.utils.translation import gettext
 
-from .models import Entitlement, LicenseKey
+from ..models import Entitlement, LicenseKey
+from .errors import Failure, validate_text
+from .keys import hash_key
 
 DEVICE_HISTORY_LIMIT = 100
 FINGERPRINT_MAX_LENGTH = 128
-_KEY_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789"  # 32 chars from 29 symbols: ~155 bits (4.1.3)
-
-
-class Failure(Exception):
-    """One SPEC Section 14.1 error class plus a human-readable message."""
-
-    def __init__(self, error, message):
-        super().__init__(message)
-        self.error = error
-        self.message = message
-
-
-def hash_key(plaintext):
-    return hashlib.sha256(plaintext.encode("utf-8")).hexdigest()
-
-
-def issue_key(product, max_devices, expires_at=None):
-    """Returns (key, plaintext). The plaintext is returned once and never stored."""
-    if type(max_devices) is not int or max_devices < 1:
-        raise Failure("validation_error", gettext("max_devices must be an integer >= 1."))
-    plaintext = "lic_" + "".join(secrets.choice(_KEY_ALPHABET) for _ in range(32))
-    key = LicenseKey.objects.create(
-        product=product,
-        key_hash=hash_key(plaintext),
-        key_prefix=plaintext[:12],
-        max_devices=max_devices,
-        expires_at=expires_at,
-    )
-    return key, plaintext
-
-
-def revoke_key(key):
-    """Idempotent. Revoking a redeemed key does not alter its Entitlement (7.1)."""
-    if key.status != "revoked":
-        key.status = "revoked"
-        key.save(update_fields=("status",))
-    return key
-
-
-def redeem(account, plaintext):
-    """Section 7.4. Returns (entitlement, created); idempotent for the same Account."""
-
-    def work():
-        key = LicenseKey.objects.select_for_update().filter(key_hash=hash_key(plaintext)).first()
-        if key is None:
-            raise Failure("unknown_key", gettext("This license key is not recognized."))
-        if key.status == "revoked":
-            raise Failure("key_revoked", gettext("This license key has been revoked."))
-        if key.status == "redeemed":
-            if key.redeemed_by_id == account.id:
-                return key.entitlement, False
-            raise Failure(
-                "key_already_redeemed", gettext("This license key was already redeemed by another account.")
-            )
-        if Entitlement.objects.filter(account=account, product=key.product).exists():
-            raise Failure(
-                "already_entitled", gettext("This account already has an entitlement for this product.")
-            )
-        entitlement = Entitlement.objects.create(
-            account=account,
-            product=key.product,
-            max_devices=key.max_devices,
-            expires_at=key.expires_at,
-            source_key=key,
-        )
-        key.status = "redeemed"
-        key.redeemed_by = account
-        key.save(update_fields=("status", "redeemed_by"))
-        return entitlement, True
-
-    with transaction.atomic():
-        return work()
 
 
 def check_active(entitlement):
@@ -128,7 +51,9 @@ def bind(entitlement, raw_fingerprint, display_name=None, *, source_key_id=None)
             return existing, False
         if locked.devices.filter(status="bound").count() >= locked.max_devices:
             raise Failure("seat_exhausted", gettext("This entitlement has no remaining device seats."))
-        budget = max(DEVICE_HISTORY_LIMIT, locked.max_devices)
+        from licenses import services as license_services
+
+        budget = max(license_services.DEVICE_HISTORY_LIMIT, locked.max_devices)
         excess = locked.devices.count() - budget + 1
         if excess > 0:
             stale_ids = list(
@@ -173,15 +98,6 @@ def validate(plaintext, raw_fingerprint):
     if device is None:
         raise Failure("unknown_device", gettext("No bound device matches this fingerprint."))
     return device
-
-
-def validate_text(value):
-    if "\x00" in value:
-        raise Failure("validation_error", "Text must not contain null characters.")
-    try:
-        value.encode("utf-8")
-    except UnicodeError:
-        raise Failure("validation_error", "Text must contain valid Unicode characters.") from None
 
 
 def normalize_display_name(value):

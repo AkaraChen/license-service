@@ -8,6 +8,8 @@ from pydantic import BeforeValidator, ConfigDict, Field, StrictStr, TypeAdapter,
 
 from .. import services
 
+Fingerprint = Annotated[str, BeforeValidator(str.strip), Field(min_length=1, max_length=128)]
+
 
 class Empty(Schema):
     model_config = ConfigDict(extra="forbid", strict=True)
@@ -56,12 +58,12 @@ class DeviceName(Empty):
 
 
 class DeviceBind(Empty):
-    device_fingerprint: str
+    device_fingerprint: Fingerprint
     display_name: Annotated[str, Field(min_length=1, max_length=200)] | None = None
 
 
 class Validate(Redeem):
-    device_fingerprint: str
+    device_fingerprint: Fingerprint
 
 
 class Activate(Validate):

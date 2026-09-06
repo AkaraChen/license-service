@@ -4,10 +4,8 @@ Account registration and authentication live in accounts.py.
 
 from .devices import (
     DEVICE_HISTORY_LIMIT,
-    FINGERPRINT_MAX_LENGTH,
     bind,
     check_active,
-    normalize_fingerprint,
     rename_device,
     resolve_redeemed_key,
     unbind,
@@ -19,13 +17,11 @@ from .redeem import redeem
 
 __all__ = (
     "DEVICE_HISTORY_LIMIT",
-    "FINGERPRINT_MAX_LENGTH",
     "Failure",
     "bind",
     "check_active",
     "hash_key",
     "issue_key",
-    "normalize_fingerprint",
     "redeem",
     "rename_device",
     "resolve_redeemed_key",

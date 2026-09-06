@@ -7,7 +7,6 @@ from .errors import Failure
 from .keys import hash_key
 
 DEVICE_HISTORY_LIMIT = 100
-FINGERPRINT_MAX_LENGTH = 128
 
 
 def check_active(entitlement):
@@ -20,19 +19,8 @@ def check_active(entitlement):
         raise Failure("entitlement_expired", gettext("This entitlement has expired."))
 
 
-def normalize_fingerprint(raw):
-    """Section 4.2: trim only; never HTML-decode; case-sensitive; bounded length."""
-    fp = (raw or "").strip()
-    if not fp:
-        raise Failure("validation_error", gettext("device_fingerprint must not be empty."))
-    if len(fp) > FINGERPRINT_MAX_LENGTH:
-        raise Failure("validation_error", gettext("device_fingerprint exceeds 128 characters."))
-    return fp
-
-
-def bind(entitlement, raw_fingerprint, display_name=None, *, source_key_id=None):
+def bind(entitlement, fingerprint, display_name=None, *, source_key_id=None):
     """Section 7.5. Returns (device, created); same fingerprint is idempotent."""
-    fp = normalize_fingerprint(raw_fingerprint)
 
     def work():
         if source_key_id is not None:
@@ -45,7 +33,7 @@ def bind(entitlement, raw_fingerprint, display_name=None, *, source_key_id=None)
         if source_key_id is not None and locked.source_key_id != source_key_id:
             raise Failure("unknown_key", gettext("This license key is not recognized."))
         check_active(locked)
-        existing = locked.devices.filter(device_fingerprint=fp, status="bound").first()
+        existing = locked.devices.filter(device_fingerprint=fingerprint, status="bound").first()
         if existing is not None:
             return existing, False
         if locked.devices.filter(status="bound").count() >= locked.max_devices:
@@ -59,7 +47,7 @@ def bind(entitlement, raw_fingerprint, display_name=None, *, source_key_id=None)
                 locked.devices.filter(status="unbound").order_by("pk").values_list("pk", flat=True)[:excess]
             )
             locked.devices.filter(pk__in=stale_ids).delete()
-        return locked.devices.create(device_fingerprint=fp, display_name=display_name), True
+        return locked.devices.create(device_fingerprint=fingerprint, display_name=display_name), True
 
     with transaction.atomic():
         return work()
@@ -87,13 +75,11 @@ def resolve_redeemed_key(plaintext):
     return key, entitlement
 
 
-def validate(plaintext, raw_fingerprint):
+def validate(plaintext, fingerprint):
     """Section 7.7. Read-only: MUST NOT create rows."""
     _, entitlement = resolve_redeemed_key(plaintext)
     check_active(entitlement)
-    device = entitlement.devices.filter(
-        device_fingerprint=normalize_fingerprint(raw_fingerprint), status="bound"
-    ).first()
+    device = entitlement.devices.filter(device_fingerprint=fingerprint, status="bound").first()
     if device is None:
         raise Failure("unknown_device", gettext("No bound device matches this fingerprint."))
     return device

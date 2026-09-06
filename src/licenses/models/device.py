@@ -22,5 +22,10 @@ class Device(models.Model):
                 condition=models.Q(display_name__isnull=True)
                 | models.Q(LessThanOrEqual(Length("display_name"), 200)),
                 name="device_display_name_max_length",
-            )
+            ),
+            models.UniqueConstraint(
+                fields=("entitlement", "device_fingerprint"),
+                condition=models.Q(status="bound"),
+                name="device_bound_fingerprint_unique",
+            ),
         ]

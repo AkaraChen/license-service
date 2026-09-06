@@ -14,12 +14,38 @@ from django.templatetags.static import static
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-DEBUG = os.environ.get("LICENSE_DEBUG", "1") == "1"
+DEBUG = os.environ.get("LICENSE_DEBUG", "0") == "1"
 DEV_SECRET_KEY = "django-insecure-development-default"
 SECRET_KEY = os.environ.get("LICENSE_SESSION_SECRET", DEV_SECRET_KEY)
 LISTEN_HOST = os.environ.get("LICENSE_LISTEN_HOST", "127.0.0.1")
 LISTEN_PORT = int(os.environ.get("LICENSE_LISTEN_PORT", "8000"))
-ALLOWED_HOSTS = os.environ.get("LICENSE_ALLOWED_HOSTS", "*").split(",")
+ALLOWED_HOSTS = os.environ.get("LICENSE_ALLOWED_HOSTS", "localhost,127.0.0.1,[::1]").split(",")
+if not DEBUG and SECRET_KEY == DEV_SECRET_KEY:
+    raise ImproperlyConfigured("config_invalid: licenses.E001: LICENSE_SESSION_SECRET is required.")
+if DEBUG and LISTEN_HOST not in {"localhost", "127.0.0.1", "::1"}:
+    raise ImproperlyConfigured("config_invalid: debug mode requires a loopback listener.")
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
+SECURE_SSL_REDIRECT = not DEBUG
+SECURE_HSTS_SECONDS = 31536000 if not DEBUG else 0
+# Opt in only behind an edge that strips and replaces X-Forwarded-Proto.
+if os.environ.get("LICENSE_TRUST_PROXY", "0") == "1":
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+DATA_UPLOAD_MAX_MEMORY_SIZE = 16384
+LICENSE_REGISTRATION_SOURCE_LIMIT = int(os.environ.get("LICENSE_REGISTRATION_SOURCE_LIMIT", "5"))
+LICENSE_REGISTRATION_GLOBAL_LIMIT = int(os.environ.get("LICENSE_REGISTRATION_GLOBAL_LIMIT", "100"))
+LICENSE_ACCOUNT_LIMIT = int(os.environ.get("LICENSE_ACCOUNT_LIMIT", "10000"))
+LICENSE_DEVICE_HISTORY_LIMIT = int(os.environ.get("LICENSE_DEVICE_HISTORY_LIMIT", "100"))
+if (
+    min(
+        LICENSE_REGISTRATION_SOURCE_LIMIT,
+        LICENSE_REGISTRATION_GLOBAL_LIMIT,
+        LICENSE_DEVICE_HISTORY_LIMIT,
+        LICENSE_ACCOUNT_LIMIT,
+    )
+    < 1
+):
+    raise ImproperlyConfigured("config_invalid: abuse limits must be positive.")
 
 # `store` bundle (Section 6.2): which durable engine and how to open it.
 # Supported engines: "sqlite3" (default; LICENSE_STORE_NAME = file path) and
@@ -66,6 +92,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "licenses.audit.AuditMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
 ]
 ROOT_URLCONF = "config.urls"
@@ -99,6 +126,10 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 TAILWIND_CLI_VERSION = "4.3.3"
 TAILWIND_CLI_SRC_CSS = "src/styles.css"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+# The first backend enforces durable account/source login throttles. Keep the
+# stock backend configured so sessions created before this backend was added
+# remain valid; PermissionDenied prevents failed logins from falling through.
+AUTHENTICATION_BACKENDS = ["licenses.auth.ThrottledModelBackend", "django.contrib.auth.backends.ModelBackend"]
 # Admin theme matches the customer pages: Geist, grayscale surface, one blue accent.
 UNFOLD = {
     "SITE_TITLE": "License Service",

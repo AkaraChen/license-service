@@ -12,7 +12,7 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.translation import gettext as _
 from django.views.decorators.http import require_GET, require_POST
 
-from . import services
+from . import audit, services
 from .models import Device, Entitlement
 from .services import Failure
 
@@ -41,6 +41,7 @@ def _fail(view):
         try:
             return view(request, *args, **kwargs)
         except Failure as exc:
+            audit.resources(request, outcome=exc.error)
             return render(request, "licenses/error.html", {"error": exc.message}, status=400)
 
     return wrapped
@@ -52,10 +53,14 @@ def register_page(request):
         return redirect(nxt or "ui_home")
     if request.method == "POST":
         try:
-            user = services.register_account(request.POST.get("username"), request.POST.get("password"))
+            user = services.register_account(
+                request.POST.get("username"), request.POST.get("password"), request=request
+            )
         except Failure as exc:
+            audit.resources(request, outcome=exc.error)
             return render(request, "licenses/register.html", {"error": exc.message, "next": nxt})
-        login(request, user)
+        audit.resources(request, actor="admin" if user.is_staff else "customer", account_id=user.pk)
+        login(request, user, backend="licenses.auth.ThrottledModelBackend")
         return redirect(nxt or "ui_home")
     return render(request, "licenses/register.html", {"next": nxt})
 
@@ -70,7 +75,9 @@ def login_page(request):
                 request, request.POST.get("username"), request.POST.get("password")
             )
         except Failure as exc:
+            audit.resources(request, outcome=exc.error)
             return render(request, "licenses/login.html", {"error": exc.message, "next": nxt})
+        audit.resources(request, actor="admin" if user.is_staff else "customer", account_id=user.pk)
         login(request, user)
         return redirect(nxt or "ui_home")
     return render(request, "licenses/login.html", {"next": nxt})
@@ -91,7 +98,8 @@ def home(request):
 @_fail
 def redeem_page(request):
     if request.method == "POST":
-        services.redeem(request.user, request.POST.get("license_key", ""))
+        entitlement, _ = services.redeem(request.user, request.POST.get("license_key", ""))
+        audit.resources(request, entitlement_id=entitlement.pk, product_id=entitlement.product_id)
         return redirect("ui_home")
     return render(request, "licenses/redeem.html")
 
@@ -132,6 +140,7 @@ def entitlement_page(request, entitlement_id):
 def unbind_page(request, device_id):
     device = _own(Device, device_id, request.user)
     services.unbind(device)
+    audit.resources(request, entitlement_id=device.entitlement_id, product_id=device.entitlement.product_id)
     return redirect("ui_entitlement", entitlement_id=device.entitlement_id)
 
 
@@ -140,6 +149,6 @@ def unbind_page(request, device_id):
 @_fail
 def rename_page(request, device_id):
     device = _own(Device, device_id, request.user)
-    device.display_name = request.POST.get("display_name") or None
-    device.save(update_fields=("display_name",))
+    services.rename_device(device, request.POST.get("display_name"))
+    audit.resources(request, entitlement_id=device.entitlement_id, product_id=device.entitlement.product_id)
     return redirect("ui_entitlement", entitlement_id=device.entitlement_id)

@@ -40,7 +40,7 @@ def build_openapi():
             spec["parameters"] = [
                 {"name": p, "in": "path", "required": True, "schema": {"type": "integer"}} for p in params
             ]
-        if fields:
+        if method in ("POST", "PATCH"):
             spec["requestBody"] = {
                 "required": True,
                 "content": {

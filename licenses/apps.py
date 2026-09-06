@@ -5,6 +5,9 @@ from django.core.checks import Error, register
 class LicensesConfig(AppConfig):
     name = "licenses"
 
+    def ready(self):
+        from . import signals  # noqa: F401
+
 
 @register("config")
 def config_check(app_configs, **kwargs):

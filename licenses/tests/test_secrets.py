@@ -3,6 +3,7 @@
 import os
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 from django.contrib.auth.models import User
@@ -65,7 +66,12 @@ def test_restart_preserves_all_durable_rows(admin_api):
     )
     env = {**os.environ, "LICENSE_STORE_NAME": str(db_file)}
     out = subprocess.run(
-        [sys.executable, "-c", probe], capture_output=True, text=True, env=env, cwd="/workspace", check=False
+        [sys.executable, "-c", probe],
+        capture_output=True,
+        text=True,
+        env=env,
+        cwd=Path(__file__).resolve().parents[2],
+        check=False,
     )
     assert out.returncode == 0, out.stderr
     assert out.stdout.split() == ["2", "1", "1", "1", "1"]

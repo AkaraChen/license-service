@@ -3,22 +3,20 @@ for URL patterns, validation, and OpenAPI (Section 12). Error envelope
 (5.3): {"error": <14.1 class>, "message": <str>}; session cookie auth."""
 
 import json
-import logging
-import uuid
 
 from django.contrib.auth import login, logout
 from django.contrib.auth.models import User
-from django.db import OperationalError
+from django.core.exceptions import RequestDataTooBig
+from django.db import DataError, IntegrityError, OperationalError
 from django.http import JsonResponse
 from django.urls import path
 from django.utils.dateparse import parse_datetime
 from django.views.decorators.csrf import csrf_exempt
 
-from . import services
+from . import audit, services
 from .models import Device, Entitlement, LicenseKey, Product
 from .services import Failure
 
-log = logging.getLogger("licenses.api")
 # Section 5.3 (normative) error class -> HTTP status
 HTTP_STATUS = {
     cls: int(code)
@@ -28,7 +26,7 @@ HTTP_STATUS = {
             "validation_error:400 unauthenticated:401 forbidden:403 not_found:404 unknown_key:404 "
             "unknown_device:404 conflict:409 already_entitled:409 key_already_redeemed:409 key_revoked:409 "
             "seat_exhausted:409 entitlement_suspended:409 entitlement_revoked:409 entitlement_expired:409 "
-            "store_unavailable:503"
+            "store_unavailable:503 rate_limited:429"
         ).split()
     )
 }
@@ -102,17 +100,25 @@ def parse_body(request, fields):
     """Section 5.2: strict JSON object; unknown fields rejected; no partial mutation."""
     if request.method not in ("POST", "PATCH"):
         return {}
+    if request.content_type != "application/json":
+        raise Failure("validation_error", "Write bodies must be Content-Type: application/json.")
     if not request.body:
         data = {}
-    elif request.content_type != "application/json":
-        raise Failure("validation_error", "Write bodies must be Content-Type: application/json.")
     else:
         try:
             data = json.loads(request.body)
-        except ValueError:
+        except (ValueError, RecursionError):
             raise Failure("validation_error", "Body must be a JSON object.")
     if not isinstance(data, dict):
         raise Failure("validation_error", "Body must be a JSON object.")
+    # Reject invalid Unicode and nested containers before reflecting field names,
+    # parsing datetimes, hashing secrets, or calling the database.
+    for field, value in data.items():
+        services.validate_text(field)
+        if isinstance(value, str):
+            services.validate_text(value)
+        elif isinstance(value, (list, dict)):
+            raise Failure("validation_error", "Nested values are not supported.")
     unknown = sorted(set(data) - {name for name, _, _ in fields})
     if unknown:
         raise Failure("validation_error", f"Unknown fields: {', '.join(unknown)}.")
@@ -126,12 +132,18 @@ def parse_body(request, fields):
             "str": type(value) is str,
             "int": type(value) is int,
             "str?": value is None or type(value) is str,
-            "dt?": value is None or (type(value) is str and parse_datetime(value) is not None),
+            "dt?": value is None or type(value) is str,
         }[kind]
         if not valid:
             raise Failure("validation_error", f"Field {name} has an invalid value.")
         if kind == "dt?":
-            data[name] = parse_datetime(value) if value else None
+            try:
+                parsed = parse_datetime(value) if value is not None else None
+            except (ValueError, OverflowError):
+                parsed = None
+            if value is not None and parsed is None:
+                raise Failure("validation_error", f"Field {name} has an invalid value.")
+            data[name] = parsed
     return data
 
 
@@ -141,8 +153,14 @@ def dispatch(request, op_path, **path_params):
     if request.method not in by_method:
         return JsonResponse({"error": "validation_error", "message": "Method not allowed."}, status=405)
     name, _, _, auth, fields, handler = by_method[request.method]
-    ctx = {"actor": "anonymous", "rid": request.headers.get("X-Request-ID", uuid.uuid4().hex[:12])}
+    ctx = {"actor": "anonymous", "rid": audit.request_id(request)}
     try:
+        if request.method in {"POST", "PATCH"} and (auth != "anonymous" or name in {"login", "register"}):
+            # Browser requests with an Origin must be exactly same-origin, not
+            # merely same-site. Non-browser JSON clients need no CSRF token.
+            origin = request.headers.get("Origin")
+            if origin is not None and origin != f"{request.scheme}://{request.get_host()}":
+                raise Failure("forbidden", "Cross-origin writes are not allowed.")
         user = request.user
         if auth in ("session", "admin"):
             if not user.is_authenticated:
@@ -153,10 +171,19 @@ def dispatch(request, op_path, **path_params):
         payload, status = handler(request, parse_body(request, fields), ctx, **path_params)
         ctx["outcome"] = "success"
         _audit(name, ctx)
-        return JsonResponse(payload, status=status)
-    except (Failure, OperationalError) as exc:
-        error = exc.error if isinstance(exc, Failure) else "store_unavailable"
-        message = exc.message if isinstance(exc, Failure) else "The license store is unavailable."
+        response = JsonResponse(payload, status=status)
+        if name == "issue_license_key":
+            response["Cache-Control"] = "no-store, private"
+        return response
+    except (Failure, OperationalError, IntegrityError, DataError, RequestDataTooBig, UnicodeError) as exc:
+        if isinstance(exc, Failure):
+            error, message = exc.error, exc.message
+        elif isinstance(exc, OperationalError):
+            error, message = "store_unavailable", "The license store is unavailable."
+        elif isinstance(exc, IntegrityError):
+            error, message = "conflict", "The requested change conflicts with existing data."
+        else:
+            error, message = "validation_error", "The request body is invalid or too large."
         ctx["outcome"] = error
         _audit(name, ctx)
         return JsonResponse({"error": error, "message": message}, status=HTTP_STATUS[error])
@@ -164,7 +191,7 @@ def dispatch(request, op_path, **path_params):
 
 def _audit(op_name, ctx):
     """Section 13 fields per mutating/validate call; never logs secrets or raw fingerprints."""
-    log.info("op=%s %s", op_name, " ".join(f"{k}={v}" for k, v in ctx.items()))
+    audit.emit(op_name, ctx)
 
 
 def _get(model, pk):
@@ -198,7 +225,7 @@ def _get_op(name, op_path, auth, key, model, serializer):
 
 @op("register", "POST", "auth/register", "anonymous", (("username", "str", True), ("password", "str", True)))
 def register(request, data, ctx):
-    user = services.register_account(data["username"], data["password"])
+    user = services.register_account(data["username"], data["password"], request=request)
     ctx.update(actor="customer", account_id=user.pk)
     return {"account": account_json(user)}, 201
 
@@ -334,8 +361,7 @@ def unbind_my_device(request, data, ctx, pk):
 @op("set_my_device_display_name", "PATCH", "me/devices/{pk}", "session", (("display_name", "str?", True),))
 def set_my_device_display_name(request, data, ctx, pk):
     device = _mine(Device, pk, request.user)
-    device.display_name = data["display_name"]
-    device.save(update_fields=("display_name",))
+    services.rename_device(device, data["display_name"])
     ctx.update(entitlement_id=device.entitlement_id, device_id=device.pk)
     return {"device": device_json(device)}, 200
 
@@ -349,8 +375,10 @@ def set_my_device_display_name(request, data, ctx, pk):
 )
 def activate_device(request, data, ctx):
     ctx["actor"] = "application"
-    _, entitlement = services.resolve_redeemed_key(data["license_key"])
-    device, created = services.bind(entitlement, data["device_fingerprint"], data.get("display_name"))
+    key, entitlement = services.resolve_redeemed_key(data["license_key"])
+    device, created = services.bind(
+        entitlement, data["device_fingerprint"], data.get("display_name"), source_key_id=key.pk
+    )
     ctx.update(product_id=entitlement.product_id, entitlement_id=entitlement.pk, device_id=device.pk)
     return {"device": device_json(device)}, 201 if created else 200
 

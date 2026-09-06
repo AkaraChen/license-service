@@ -38,8 +38,9 @@ css:
     uv run python manage.py tailwind build
 
 # Migrate and start the service with a Tailwind watcher
-serve: migrate
-    uv run python manage.py tailwind runserver {{ host }}:{{ port }}
+serve:
+    LICENSE_DEBUG=1 uv run python manage.py migrate
+    LICENSE_DEBUG=1 uv run python manage.py tailwind runserver {{ host }}:{{ port }}
 
 alias run := serve
 alias start := serve
@@ -50,7 +51,7 @@ manage *args:
 
 # Run the pytest suite
 test *args:
-    uv run pytest {{ args }}
+    LICENSE_DEBUG=1 uv run pytest {{ args }}
 
 # Format with ruff
 fmt:

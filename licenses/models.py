@@ -5,6 +5,9 @@ created_at = User.date_joined. One Account type for Admin and Customer."""
 
 from django.conf import settings
 from django.db import models
+from django.db.models.functions import Length
+from django.db.models.lookups import LessThanOrEqual
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 
@@ -61,3 +64,35 @@ class Device(models.Model):
     status = models.CharField(
         max_length=10, choices=STATUSES, default="bound"
     )  # only "bound" occupies a seat
+
+    class Meta:
+        constraints = [  # noqa: RUF012 - Django Meta idiom
+            models.CheckConstraint(
+                condition=models.Q(display_name__isnull=True)
+                | models.Q(LessThanOrEqual(Length("display_name"), 200)),
+                name="device_display_name_max_length",
+            )
+        ]
+
+
+class RegistrationThrottle(models.Model):
+    key_digest = models.CharField(max_length=64, unique=True)
+    count = models.PositiveIntegerField(default=0)
+    window_started_at = models.DateTimeField(default=timezone.now, db_index=True)
+
+
+class LoginThrottle(models.Model):
+    """Durable, privacy-preserving failed-login counters."""
+
+    SCOPES = (("account", "account"), ("source", "source"))
+    scope = models.CharField(max_length=7, choices=SCOPES)
+    key_digest = models.CharField(max_length=64)
+    failure_count = models.PositiveIntegerField(default=0)
+    window_started_at = models.DateTimeField(default=timezone.now)
+    locked_until = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True, db_index=True)
+
+    class Meta:
+        constraints = [  # noqa: RUF012 - Django Meta idiom
+            models.UniqueConstraint(fields=("scope", "key_digest"), name="one_login_throttle_per_key")
+        ]

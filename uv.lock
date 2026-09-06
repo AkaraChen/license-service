@@ -110,6 +110,19 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/07/fd/454bad110a4276e709dfeeff14b00af653d6eb426aba21444f480e954dda/django_tailwind_cli-4.8.0-py3-none-any.whl", hash = "sha256:04adb4cecd1c2165e517e05f756e055bf1004159f52f00808a459a2e7cf580fa", size = 54108, upload-time = "2026-08-30T11:12:40.029Z" },
 ]
 
+
+[[package]]
+name = "django-unfold"
+version = "0.105.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "django" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/1b/b6/72c412b2a296a3d7a283d5cff80a2b2b539dd621434da0d0e67f9df4add3/django_unfold-0.105.0.tar.gz", hash = "sha256:0051c43185bc54807d522fad50663a5b1332ae0e54ebe490b1f6c879cc6962db", size = 1112124, upload-time = "2026-09-04T08:51:42.019Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/08/c2/72eccd0adacdca28a6dbd54b7092c8cd29b71ef881fc293e49ee57276fd9/django_unfold-0.105.0-py3-none-any.whl", hash = "sha256:b72880caa376bdc893c2e256dd990812c0301f269e0b977a6b9b4342c6606477", size = 1237302, upload-time = "2026-09-04T08:51:40.558Z" },
+]
+
 [[package]]
 name = "iniconfig"
 version = "2.3.0"
@@ -127,6 +140,7 @@ dependencies = [
     { name = "django" },
     { name = "django-admin-extra-buttons" },
     { name = "django-tailwind-cli" },
+    { name = "django-unfold" },
     { name = "pytest" },
     { name = "pytest-django" },
 ]
@@ -141,6 +155,7 @@ requires-dist = [
     { name = "django", specifier = ">=5.2" },
     { name = "django-admin-extra-buttons", specifier = ">=2.2.1" },
     { name = "django-tailwind-cli", specifier = ">=4.8.0" },
+    { name = "django-unfold", specifier = ">=0.105.0" },
     { name = "pytest", specifier = ">=8.0" },
     { name = "pytest-django", specifier = ">=4.8" },
 ]

@@ -7,11 +7,18 @@ from admin_extra_buttons.api import ExtraButtonsMixin, button
 from django import forms
 from django.contrib import admin, messages
 from django.contrib.admin.views.decorators import staff_member_required
-from django.contrib.auth.models import User
+from django.contrib.auth.admin import GroupAdmin as BaseGroupAdmin
+from django.contrib.auth.models import Group, User
 from django.db import transaction
 from django.shortcuts import redirect
 from django.template.response import TemplateResponse
 from django.utils.translation import gettext_lazy as _
+from unfold.admin import ModelAdmin
+from unfold.widgets import (
+    UnfoldAdminIntegerFieldWidget,
+    UnfoldAdminSelectWidget,
+    UnfoldAdminSplitDateTimeWidget,
+)
 
 from . import services
 from .models import Device, Entitlement, LicenseKey, Product
@@ -21,10 +28,14 @@ _ISSUED_ONCE_SESSION_KEY = "_issued_license_keys_once"
 
 
 class BatchIssueForm(forms.Form):
-    product = forms.ModelChoiceField(queryset=Product.objects.order_by("code"), label=_("Product"))
-    max_devices = forms.IntegerField(min_value=1, initial=1, label=_("Max devices"))
+    product = forms.ModelChoiceField(
+        queryset=Product.objects.order_by("code"), label=_("Product"), widget=UnfoldAdminSelectWidget
+    )
+    max_devices = forms.IntegerField(
+        min_value=1, initial=1, label=_("Max devices"), widget=UnfoldAdminIntegerFieldWidget
+    )
     expires_at = forms.SplitDateTimeField(
-        required=False, widget=admin.widgets.AdminSplitDateTime(), label=_("Expires at")
+        required=False, widget=UnfoldAdminSplitDateTimeWidget, label=_("Expires at")
     )
     count = forms.IntegerField(
         min_value=1,
@@ -32,16 +43,17 @@ class BatchIssueForm(forms.Form):
         initial=1,
         label=_("Number of keys"),
         help_text=_("At most 50 keys per batch."),
+        widget=UnfoldAdminIntegerFieldWidget,
     )
 
 
 @admin.register(Product)
-class ProductAdmin(admin.ModelAdmin):
+class ProductAdmin(ModelAdmin):
     list_display = ("code", "name", "created_at")
 
 
 @admin.register(LicenseKey)
-class LicenseKeyAdmin(ExtraButtonsMixin, admin.ModelAdmin):
+class LicenseKeyAdmin(ExtraButtonsMixin, ModelAdmin):
     list_display = (
         "key_prefix",
         "product",
@@ -100,7 +112,7 @@ class LicenseKeyAdmin(ExtraButtonsMixin, admin.ModelAdmin):
 
 
 @admin.register(Entitlement)
-class EntitlementAdmin(admin.ModelAdmin):
+class EntitlementAdmin(ModelAdmin):
     list_display = ("account", "product", "status", "max_devices", "expires_at", "created_at")
     fields = ("account", "product", "status", "max_devices", "expires_at", "source_key", "created_at")
     readonly_fields = ("account", "product", "max_devices", "expires_at", "source_key", "created_at")
@@ -111,7 +123,7 @@ class EntitlementAdmin(admin.ModelAdmin):
 
 
 @admin.register(Device)
-class DeviceAdmin(admin.ModelAdmin):
+class DeviceAdmin(ModelAdmin):
     list_display = ("device_fingerprint", "entitlement", "status", "display_name", "bound_at")
     actions = ("unbind_devices",)
 
@@ -128,11 +140,17 @@ class DeviceAdmin(admin.ModelAdmin):
 
 
 admin.site.unregister(User)
+admin.site.unregister(Group)
 
 
 @admin.register(User)
-class AccountAdmin(admin.ModelAdmin):
+class AccountAdmin(ModelAdmin):
     """One Account type (4.1.1). Password hashes are never rendered."""
 
     list_display = ("username", "is_staff", "is_active", "date_joined")
     fields = ("username", "email", "is_staff", "is_active")
+
+
+@admin.register(Group)
+class UnfoldGroupAdmin(BaseGroupAdmin, ModelAdmin):
+    pass

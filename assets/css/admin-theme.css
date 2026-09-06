@@ -1,0 +1,13 @@
+/* Same Geist stack as the customer pages (licenses/templates/licenses/base.html). */
+@import url("https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap");
+
+body,
+.font-sans {
+  font-family: "Geist", ui-sans-serif, system-ui, sans-serif !important;
+}
+
+code,
+pre,
+.font-mono {
+  font-family: "Geist Mono", ui-monospace, "SFMono-Regular", menlo, monospace !important;
+}

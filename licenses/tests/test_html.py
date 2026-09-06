@@ -22,7 +22,12 @@ def test_admin_console_requires_admin_session(db, admin, customer):
 
     staff = Client()
     staff.login(username="root", password=ADMIN_PW)
-    assert staff.get("/admin/").status_code == 200
+    home = staff.get("/admin/")
+    assert home.status_code == 200
+    assert b"unfold" in home.content
+    assert b"License Service" in home.content
+    assert b"--color-primary-600: rgb(0, 107, 255)" in home.content
+    assert b"css/admin-theme.css" in home.content
 
 
 def test_customer_pages_full_flow(db, customer, product):
@@ -179,9 +184,7 @@ def test_customer_pages_follow_accept_language(db):
     assert b"Log in" not in zh.content
 
     failed = Client().post(
-        "/ui/login",
-        {"username": "nobody", "password": "wrong"},
-        HTTP_ACCEPT_LANGUAGE="zh-hans",
+        "/ui/login", {"username": "nobody", "password": "wrong"}, HTTP_ACCEPT_LANGUAGE="zh-hans"
     )
     assert failed.status_code == 200
     assert "用户名或密码不正确" in failed.content.decode()

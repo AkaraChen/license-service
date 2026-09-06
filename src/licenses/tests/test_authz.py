@@ -44,15 +44,14 @@ def test_duplicate_username_conflict_case_insensitive(api):
 
 
 @pytest.mark.parametrize("path", ["/api/auth/login", "/ui/login", "/admin/login/"])
-def test_login_resolves_case_and_whitespace_to_registered_account(client, admin, path):
-    credentials = {"username": "  RoOt  ", "password": "admin-pw-123"}
+def test_login_is_case_sensitive(client, admin, path):
+    credentials = {"username": "RoOt", "password": "admin-pw-123"}
     if path.startswith("/api/"):
         response = client.post(path, credentials, content_type="application/json")
-        assert response.status_code == 200
-        assert response.json()["account"]["account_id"] == admin.pk
+        assert response.status_code == 401
     else:
-        assert client.post(path, credentials).status_code == 302
-    assert client.get("/admin/").status_code == 200
+        assert client.post(path, credentials).status_code == 200
+    assert client.get("/admin/").status_code == 302
 
 
 def test_duplicate_product_code_conflict(admin_api):

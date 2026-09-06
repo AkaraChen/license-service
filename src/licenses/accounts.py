@@ -1,7 +1,5 @@
-"""Account registration and case-insensitive login; packages own rate limiting."""
+"""Account registration and rate limiting."""
 
-from django.contrib.auth import get_user_model
-from django.contrib.auth.backends import ModelBackend
 from django.contrib.auth.models import User
 from django.contrib.sessions.models import Session
 from django.core.cache import cache
@@ -55,28 +53,6 @@ def set_account_active(account, active):
     account.save(update_fields=("is_active",))
     drop_account_sessions(account)
     return account
-
-
-def canonical_username(username):
-    username = (username or "").strip()
-    account = (
-        get_user_model()
-        .objects.alias(canonical=Lower("username"))
-        .filter(canonical=Lower(Value(username)))
-        .first()
-    )
-    return account.username if account is not None else username
-
-
-class CaseInsensitiveBackend(ModelBackend):
-    def authenticate(self, request, username=None, password=None, **kwargs):
-        return super().authenticate(
-            request, username=canonical_username(username), password=password, **kwargs
-        )
-
-
-def axes_username(request, credentials):
-    return canonical_username((credentials or {}).get("username"))
 
 
 def lockout_response(request, response, credentials=None):

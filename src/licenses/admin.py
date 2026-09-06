@@ -107,6 +107,11 @@ class LicenseKeyAdmin(ExtraButtonsMixin, AuditedAdmin):
     fields = ("product", "max_devices", "expires_at")  # add form; key_hash is never shown
     actions = ("revoke_keys",)
 
+    def formfield_for_dbfield(self, db_field, request, **kwargs):
+        if db_field.name == "max_devices":
+            kwargs["min_value"] = 1
+        return super().formfield_for_dbfield(db_field, request, **kwargs)
+
     def has_change_permission(self, request, obj=None):
         return False  # issued keys are immutable; revoke via the action below
 

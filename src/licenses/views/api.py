@@ -6,17 +6,71 @@ from django.contrib.auth import login as auth_login
 from django.contrib.auth import logout as auth_logout
 from django.contrib.auth.forms import AuthenticationForm
 from django.contrib.auth.models import User
-from django.db import transaction
-from django.shortcuts import get_object_or_404
+from django.core.exceptions import RequestDataTooBig
+from django.db import IntegrityError, transaction
+from django.http import Http404
+from django.shortcuts import get_object_or_404 as django_get_object_or_404
 from django.views.decorators.cache import never_cache
-from ninja import Router, Status
+from django_ratelimit.exceptions import Ratelimited
+from ninja import NinjaAPI, Router, Status
 from ninja.decorators import decorate_view
+from ninja.errors import ValidationError as SchemaError
+from ninja.security import SessionAuth
 
 from .. import accounts, services
 from ..models import Device, Entitlement, LicenseKey, Product
-from ..services import Failure
+from ..services.errors import (
+    Conflict,
+    Failure,
+    Forbidden,
+    NotFound,
+    RateLimited,
+    Unauthenticated,
+    ValidationError,
+)
 from . import schemas as s
-from .http import admin_session, api, customer_session
+
+
+class LicenseAPI(NinjaAPI):
+    def get_openapi_operation_id(self, operation):
+        return operation.view_func.__name__
+
+    def on_exception(self, request, exc):
+        if isinstance(exc, Failure):
+            return exc.as_response(request)
+        if isinstance(exc, (SchemaError, UnicodeError, RequestDataTooBig)):
+            return ValidationError().as_response(request)
+        return super().on_exception(request, exc)
+
+
+api = LicenseAPI(title="License Service", version="3.0.0", openapi_url="/openapi.json", docs_url="/docs")
+
+
+def get_object_or_404(klass, *args, **kwargs):
+    try:
+        return django_get_object_or_404(klass, *args, **kwargs)
+    except Http404:
+        raise NotFound() from None
+
+
+class CustomerSession(SessionAuth):
+    def authenticate(self, request, key):
+        user = super().authenticate(request, key)
+        if user is None:
+            raise Unauthenticated()
+        return user
+
+
+class AdminSession(CustomerSession):
+    def authenticate(self, request, key):
+        user = super().authenticate(request, key)
+        if not user.is_staff:
+            raise Forbidden()
+        return user
+
+
+customer_session = CustomerSession(csrf=False)
+admin_session = AdminSession(csrf=False)
 
 log = logging.getLogger(__name__)
 
@@ -27,7 +81,10 @@ public = Router()
 
 @public.post("/auth/register", response={201: dict[str, s.Account], **s.ERROR_RESPONSES})
 def register(request, data: s.Credentials):
-    user = accounts.register_account(data.username, data.password, request=request)
+    try:
+        user = accounts.register_account(data.username, data.password, request=request)
+    except Ratelimited:
+        raise RateLimited() from None
     log.info("register", extra={"account_id": user.pk})
     return Status(201, {"account": user})
 
@@ -36,7 +93,7 @@ def register(request, data: s.Credentials):
 def login(request, data: s.Credentials):
     form = AuthenticationForm(request, data=data.model_dump())
     if not form.is_valid():
-        raise Failure("unauthenticated", "Invalid username or password.")
+        raise Unauthenticated("Invalid username or password.")
     user = form.get_user()
     auth_login(request, user)
     log.info("login", extra={"account_id": user.pk})
@@ -53,9 +110,12 @@ def logout(request, data: s.Empty = s.Empty()):
 def create_product(request, data: s.ProductCreate):
     code = data.code.strip()
     if not code:
-        raise Failure("validation_error", "code must not be empty.")
-    with transaction.atomic():
-        product = Product.objects.create(code=code, name=data.name)
+        raise ValidationError("code must not be empty.")
+    try:
+        with transaction.atomic():
+            product = Product.objects.create(code=code, name=data.name)
+    except IntegrityError:
+        raise Conflict() from None
     log.info("create_product", extra={"product_id": product.pk})
     return Status(201, {"product": product})
 

@@ -2,7 +2,7 @@
 
 - `customer` — customer pages
 - `api` — JSON / OpenAPI
-- `forms` / `schemas` / `http` — HTML fields, JSON schemas, Ninja error policy
+- `forms` / `schemas` — HTML fields and JSON schemas; the JSON error envelope lives on `Failure`
 
 The Admin console stays in `licenses/admin.py` for Django autodiscover.
 """

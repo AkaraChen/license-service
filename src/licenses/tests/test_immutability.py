@@ -62,7 +62,7 @@ def test_concurrent_binds_never_exceed_max_devices(customer, product):
             _, created = services.bind(entitlement, f"machine-{i}")
             results.append(created)
         except services.Failure as exc:
-            results.append(exc.error)
+            results.append(exc.code)
         finally:
             close_old_connections()
 

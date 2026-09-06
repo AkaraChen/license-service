@@ -1,16 +1,106 @@
-class Failure(Exception):
-    """One SPEC Section 14.1 error class plus a human-readable message."""
+"""SPEC Section 14.1 error classes. Envelope and status live on the type."""
 
-    def __init__(self, error, message):
-        super().__init__(message)
-        self.error = error
-        self.message = message
+import logging
+
+from django.http import JsonResponse
+from ninja.errors import HttpError
+
+log = logging.getLogger(__name__)
+
+
+class Failure(HttpError):
+    code, status, message = "validation_error", 400, "The request is invalid."
+
+    def __init__(self, message=None):
+        if message is not None:
+            self.message = message
+        super().__init__(self.status, self.message)
+
+    def envelope(self):
+        return {"error": self.code, "message": self.message}
+
+    def as_response(self, request=None, *, status=None, headers=None):
+        if request is not None:
+            log.warning("api_error", extra={"outcome": self.code})
+        return JsonResponse(self.envelope(), status=status or self.status, headers=headers)
+
+
+class ValidationError(Failure):
+    code, status, message = "validation_error", 400, "The request body is invalid or too large."
+
+
+class Unauthenticated(Failure):
+    code, status, message = "unauthenticated", 401, "A session cookie is required."
+
+
+class Forbidden(Failure):
+    code, status, message = "forbidden", 403, "Admin privileges required."
+
+
+class NotFound(Failure):
+    code, status, message = "not_found", 404, "Not found."
+
+
+class UnknownKey(Failure):
+    code, status, message = "unknown_key", 404, "This license key is not recognized."
+
+
+class UnknownDevice(Failure):
+    code, status, message = "unknown_device", 404, "No bound device matches this fingerprint."
+
+
+class Conflict(Failure):
+    code, status, message = "conflict", 409, "The requested change conflicts with existing data."
+
+
+class AlreadyEntitled(Failure):
+    code, status, message = (
+        "already_entitled",
+        409,
+        "This account already has an entitlement for this product.",
+    )
+
+
+class KeyAlreadyRedeemed(Failure):
+    code, status, message = (
+        "key_already_redeemed",
+        409,
+        "This license key was already redeemed by another account.",
+    )
+
+
+class KeyRevoked(Failure):
+    code, status, message = "key_revoked", 409, "This license key has been revoked."
+
+
+class SeatExhausted(Failure):
+    code, status, message = "seat_exhausted", 409, "This entitlement has no remaining device seats."
+
+
+class EntitlementSuspended(Failure):
+    code, status, message = "entitlement_suspended", 409, "This entitlement is suspended."
+
+
+class EntitlementRevoked(Failure):
+    code, status, message = "entitlement_revoked", 409, "This entitlement has been revoked."
+
+
+class EntitlementExpired(Failure):
+    code, status, message = "entitlement_expired", 409, "This entitlement has expired."
+
+
+class RateLimited(Failure):
+    code, status, message = "rate_limited", 429, "Registration limit reached. Please try again later."
+
+
+class StoreUnavailable(Failure):
+    code, status, message = "store_unavailable", 503, "The license store is unavailable."
 
 
 def validate_text(value):
     if "\x00" in value:
-        raise Failure("validation_error", "Text must not contain null characters.")
+        raise ValidationError("Text must not contain null characters.")
     try:
         value.encode("utf-8")
     except UnicodeError:
-        raise Failure("validation_error", "Text must contain valid Unicode characters.") from None
+        raise ValidationError("Text must contain valid Unicode characters.") from None

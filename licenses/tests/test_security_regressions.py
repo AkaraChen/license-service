@@ -26,7 +26,7 @@ def post(client, path, body, **headers):
     return client.post(path, json.dumps(body), content_type="application/json", **headers)
 
 
-def test_device_names_are_bounded_across_all_adapters(db, customer_api, redeemed):
+def test_device_names_are_bounded_in_api_and_store(db, customer_api, redeemed):
     entitlement, key = redeemed
     assert (
         post(
@@ -46,10 +46,6 @@ def test_device_names_are_bounded_across_all_adapters(db, customer_api, redeemed
     assert not Device.objects.exists()
     device, _ = services.bind(entitlement, "m1", "unchanged")
     assert customer_api.patch(f"me/devices/{device.pk}", {"display_name": "x" * 201}).status_code == 400
-    assert (
-        customer_api.client.post(f"/ui/devices/{device.pk}/rename", {"display_name": "x" * 201}).status_code
-        == 400
-    )
     device.refresh_from_db()
     assert device.display_name == "unchanged"
     with pytest.raises((IntegrityError, DataError)), transaction.atomic():

@@ -5,6 +5,8 @@ import logging
 import re
 import uuid
 
+from django.http import JsonResponse
+
 log = logging.getLogger("licenses.api")
 
 
@@ -36,6 +38,12 @@ class AuditMiddleware:
         if user.is_authenticated:
             request.audit_context.update(actor="admin" if user.is_staff else "customer", account_id=user.pk)
         response = self.get_response(request)
+        if request.path.startswith("/api/") and response.status_code == 405:
+            return JsonResponse(
+                {"error": "validation_error", "message": "Method not allowed."},
+                status=405,
+                headers={"Allow": response.get("Allow", "")},
+            )
         if request.method not in {"POST", "PATCH", "DELETE"} or request.path.startswith("/api/"):
             return response
         match = request.resolver_match

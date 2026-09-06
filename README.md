@@ -24,7 +24,7 @@ Then open:
 | `/admin/` | Admin console (Django Admin, `is_staff` sessions only) |
 | `/ui/register`, `/ui/login` | Customer self-service pages |
 | `/` | Customer entitlement list (login required) |
-| `/openapi.json` | OpenAPI 3.1 document, generated from the operation registry |
+| `/openapi.json` | OpenAPI 3.1 document, generated from Django routes and Pydantic request models |
 | `/api/...` | JSON machine API (25 operations, SPEC Section 11) |
 
 ## Configuration (SPEC Section 6)
@@ -159,40 +159,38 @@ follow the explicit development profile in Quickstart.
 
 See [the finding-by-finding repair and validation record](docs/security-scan-2026-09-06.md).
 
-## Code layout and audit budget
+## Code layout
 
-Code is formatted with `ruff format` and linted with `ruff check` (see `ruff.toml`,
-line-length 110). Line counts below are **code lines measured by `scc`** (comments and
-blank lines excluded).
+The API uses explicit Django URL patterns and function views. Each view reads a
+named Pydantic request model, queries the relevant resource or calls the existing
+business service, and returns an allowlisted Pydantic response model. Customer
+ownership restrictions are visible in the view's ORM lookup.
 
-The domain core — entities and invariants (`models.py`), the Section 7 state
-machines (`services.py`), and the HTTP contract with validation, authorization, and
-audit logging (`api.py`) — is **584 code lines**. The expanded security controls
-exceed the original 500-line core target. Login/registration limits, audit emission
-and session invalidation live in dedicated modules; presentation uses the shared
-registry/services.
+`api_http.py` applies the common method, authentication, same-origin, error-response,
+and audit policy once. It does not register routes or generate CRUD handlers.
+`schemas.py` declares strict request types, rejects extra fields, and converts
+Pydantic input errors to the existing sanitized API error envelope. OpenAPI uses
+those same request models, rather than maintaining a separate field-type table.
+Unexpected response-model failures remain server errors, not client validation errors.
 
-| File | Code lines (scc) | Layer |
-| --- | --- | --- |
-| `licenses/models.py` | 74 | Persistence (entities, uniqueness invariants, login counters) |
-| `licenses/services.py` | 188 | Policy (authentication/redeem/bind/unbind/validate, seats) |
-| `licenses/api.py` | 322 | Coordination (25 ops, validation, authz, logging) |
-| **domain core subtotal** | **584** | |
-| `licenses/auth.py` | 135 | Authentication abuse controls |
-| `licenses/registration.py` | 39 | Registration admission and hash serialization |
-| `licenses/audit.py` | 59 | Shared audit emission |
-| `licenses/signals.py` | 14 | Session invalidation |
-| **core and security modules subtotal** | **831** | |
-| `licenses/openapi.py` | 64 | Presentation (OpenAPI from the registry) |
-| `licenses/views_ui.py` | 118 | Presentation (Customer HTML pages) |
-| `licenses/admin.py` | 155 | Presentation (Admin console config) |
-| `licenses/apps.py` | 25 | Startup preflight checks |
-| `config/`, `manage.py` | 194 | Standard Django project scaffolding |
-| `licenses/templates/` | — | HTML (Django templates + Tailwind) |
-| `src/styles.css` | — | Tailwind source (compiled to `assets/css/tailwind.css`) |
-| `licenses/tests/` | 1495 | pytest suite (not counted as core) |
+| File | Responsibility |
+| --- | --- |
+| `config/urls.py` | Explicit API and HTML routes |
+| `licenses/api.py` | Resource lookups, business calls, response construction |
+| `licenses/api_http.py` | Shared JSON HTTP policy and error mapping |
+| `licenses/schemas.py` | Pydantic request contracts and response field allowlists |
+| `licenses/openapi.py` | OpenAPI from running routes and Pydantic JSON schemas |
+| `licenses/models.py` | Persistence and database constraints |
+| `licenses/services.py` | Authentication, redemption, binding, validation, and seats |
+| `licenses/auth.py`, `licenses/registration.py` | Login and registration admission controls |
+| `licenses/audit.py`, `licenses/signals.py` | Audit emission and session invalidation |
+| `licenses/views_ui.py`, `licenses/admin.py` | Customer HTML and Django Admin |
+| `licenses/apps.py` | Startup preflight checks |
+| `config/`, `manage.py` | Django configuration and management entry point |
+| `licenses/templates/`, `src/styles.css` | HTML templates and Tailwind source |
+| `licenses/tests/` | HTTP, domain, and security regression tests |
 
-Reproduce: `scc --no-cocomo --no-size licenses/models.py licenses/services.py licenses/api.py`
+Code is formatted with `ruff format` and linted with `ruff check` (see `ruff.toml`).
 
 ## Tests
 
@@ -201,8 +199,10 @@ uv run pytest                 # SQLite suite; explicit test profile
 uv run ruff format --check . && uv run ruff check .   # style and lint gates
 ```
 
-80 tests, organized by SPEC Section 17:
+Tests are organized by SPEC Section 17:
 
+- `test_api_views.py` — route/method/auth contracts, PATCH behavior, response compatibility,
+  database failures, and sensitive-data protection.
 - `test_parsing.py` — 17.2: unknown/missing/typed fields, envelope shape, status
   mapping, session requirements, empty-list behavior.
 - `test_authz.py` — 17.4: Admin vs Customer authorization, cross-account secrecy
@@ -215,7 +215,7 @@ uv run ruff format --check . && uv run ruff check .   # style and lint gates
 - `test_immutability.py` — 17.6: no operation mutates `max_devices`/`expires_at`;
   8-thread concurrent bind race never exceeds `max_devices`.
 - `test_openapi_logs.py` — 17.7: served OpenAPI lists every operationId and matches
-  the registry; audit logs carry `actor`/`outcome`/`rid` and never secrets.
+  the running routes and schemas; audit logs carry `actor`/`outcome`/`rid` and never secrets.
 - `test_html.py` — 17.8: Admin console gating, Customer page flow
   (register → redeem → bind → unbind), no Admin console exposure, plaintext shown once.
 - `test_config.py` — 17.8: `config_invalid` and unreachable store prevent startup.

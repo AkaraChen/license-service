@@ -8,6 +8,7 @@ dependencies = [
     "django-admin-extra-buttons>=2.2.1",
     "django-tailwind-cli>=4.8.0",
     "django-unfold>=0.105.0",
+    "pydantic>=2.12,<3",
     "pytest>=8.0",
     "pytest-django>=4.8",
 ]

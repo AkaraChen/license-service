@@ -1,60 +1,51 @@
-"""OpenAPI document generated from the same OPERATIONS registry that produces
-the running HTTP implementation (Section 12).
-"""
+"""OpenAPI derived from explicit Django routes and Pydantic request models."""
 
 from django.http import JsonResponse
+from django.urls import URLPattern, get_resolver
 
-from .api import HTTP_STATUS, OPERATIONS
-
-_KIND_SCHEMA = {
-    "str": {"type": "string"},
-    "int": {"type": "integer"},
-    "str?": {"type": ["string", "null"]},
-    "dt?": {"type": ["string", "null"], "format": "date-time"},
-}
-_ERROR_SCHEMA = {
-    "type": "object",
-    "required": ["error", "message"],
-    "properties": {"error": {"type": "string", "enum": sorted(HTTP_STATUS)}, "message": {"type": "string"}},
-}
+from .api_http import HTTP_STATUS
 
 
 def build_openapi():
     paths = {}
-    for name, method, op_path, auth, fields, _ in OPERATIONS:
-        spec = {
-            "operationId": name,
-            "summary": name.replace("_", " "),
-            "security": [] if auth == "anonymous" else [{"sessionCookie": []}],
-            "responses": {
-                str(code): {
-                    "description": cls,
-                    "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}},
-                }
-                for cls, code in HTTP_STATUS.items()
-            },
-        }
-        spec["responses"]["200" if method == "GET" else "200/201"] = {"description": "success"}
-        params = [seg[1:-1] for seg in op_path.split("/") if seg.startswith("{")]
-        if params:
-            spec["parameters"] = [
-                {"name": p, "in": "path", "required": True, "schema": {"type": "integer"}} for p in params
-            ]
-        if method in ("POST", "PATCH"):
-            spec["requestBody"] = {
-                "required": True,
-                "content": {
-                    "application/json": {
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": False,
-                            "required": [n for n, _, req in fields if req],
-                            "properties": {n: _KIND_SCHEMA[kind] for n, kind, _ in fields},
-                        }
+    for route in get_resolver().url_patterns:
+        if not isinstance(route, URLPattern) or not hasattr(route.callback, "openapi"):
+            continue
+        view = route.callback
+        url = "/" + str(route.pattern)
+        for parameter in route.pattern.converters:
+            url = url.replace(f"<int:{parameter}>", "{" + parameter + "}")
+        operations = {}
+        for method, metadata in view.openapi.items():
+            name = metadata["operationId"]
+            operation = {
+                "operationId": name,
+                "summary": name.replace("_", " "),
+                "security": [] if view.access in {"anonymous", "application"} else [{"sessionCookie": []}],
+                "responses": {
+                    str(code): {
+                        "description": error,
+                        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}},
                     }
+                    for error, code in HTTP_STATUS.items()
                 },
             }
-        paths.setdefault(f"/api/{op_path}", {})[method.lower()] = spec
+            operation["responses"]["200"] = {"description": "success"}
+            if method == "POST":
+                operation["responses"]["201"] = {"description": "created"}
+            if route.pattern.converters:
+                operation["parameters"] = [
+                    {"name": parameter, "in": "path", "required": True, "schema": {"type": "integer"}}
+                    for parameter in route.pattern.converters
+                ]
+            if body := metadata.get("body"):
+                schema = body.model_json_schema()
+                operation["requestBody"] = {
+                    "required": bool(schema.get("required")),
+                    "content": {"application/json": {"schema": schema}},
+                }
+            operations[method.lower()] = operation
+        paths[url] = operations
     return {
         "openapi": "3.1.0",
         "info": {
@@ -64,7 +55,16 @@ def build_openapi():
         },
         "paths": paths,
         "components": {
-            "schemas": {"Error": _ERROR_SCHEMA},
+            "schemas": {
+                "Error": {
+                    "type": "object",
+                    "required": ["error", "message"],
+                    "properties": {
+                        "error": {"type": "string", "enum": sorted(HTTP_STATUS)},
+                        "message": {"type": "string"},
+                    },
+                }
+            },
             "securitySchemes": {"sessionCookie": {"type": "apiKey", "in": "cookie", "name": "sessionid"}},
         },
     }

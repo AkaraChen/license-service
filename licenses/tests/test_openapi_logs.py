@@ -60,10 +60,22 @@ def test_openapi_describes_error_envelope_and_write_fields(api):
     for path, fields in expected_fields.items():
         spec = next(iter(document["paths"][path].values()))
         schema = spec["requestBody"]["content"]["application/json"]["schema"]
+        if "$ref" in schema:
+            ref_name = schema["$ref"].split("/")[-1]
+            schema = document["components"]["schemas"][ref_name]
         assert set(schema["properties"]) == fields
         assert schema["additionalProperties"] is False
     validate = document["paths"]["/api/validate"]["post"]
     assert validate["security"] == []  # no session cookie for application calls
+
+    # Ensure response schemas are registered and referenced
+    for path, path_item in document["paths"].items():
+        for method, op_spec in path_item.items():
+            for status_code, resp_spec in op_spec["responses"].items():
+                schema = resp_spec["content"]["application/json"]["schema"]
+                assert "$ref" in schema
+                ref_name = schema["$ref"].split("/")[-1]
+                assert ref_name in document["components"]["schemas"]
 
 
 def test_mutating_calls_log_actor_and_outcome(api, customer_api, redeemed, caplog):

@@ -5,20 +5,22 @@ for URL patterns, validation, and OpenAPI (Section 12). Error envelope
 import json
 import logging
 import uuid
+from typing import NamedTuple
 
 from django.contrib.auth import login, logout
 from django.contrib.auth.models import User
 from django.db import OperationalError
 from django.http import JsonResponse
 from django.urls import path
-from django.utils.dateparse import parse_datetime
 from django.views.decorators.csrf import csrf_exempt
+from pydantic import ValidationError
 
-from . import services
+from . import schemas, services
 from .models import Device, Entitlement, LicenseKey, Product
 from .services import Failure
 
 log = logging.getLogger("licenses.api")
+
 # Section 5.3 (normative) error class -> HTTP status
 HTTP_STATUS = {
     cls: int(code)
@@ -32,12 +34,24 @@ HTTP_STATUS = {
         ).split()
     )
 }
-OPERATIONS = []  # (name, method, path, auth, fields, handler); fields = (name, kind, required)
 
 
-def op(name, method, op_path, auth, fields=()):
+class Operation(NamedTuple):
+    name: str
+    method: str
+    op_path: str
+    auth: str
+    req_schema: type | None
+    resp_schema: type | None
+    handler: any
+
+
+OPERATIONS: list[Operation] = []
+
+
+def op(name, method, op_path, auth, req=None, resp=None):
     def register(handler):
-        OPERATIONS.append((name, method, op_path, auth, fields, handler))
+        OPERATIONS.append(Operation(name, method, op_path, auth, req, resp, handler))
         return handler
 
     return register
@@ -98,41 +112,41 @@ def account_json(u):  # never contains password_hash
     }
 
 
-def parse_body(request, fields):
-    """Section 5.2: strict JSON object; unknown fields rejected; no partial mutation."""
+def parse_body(request, req_schema):
+    """Section 5.2: strict JSON object; unknown fields rejected; validated via Pydantic."""
     if request.method not in ("POST", "PATCH"):
         return {}
     if not request.body:
-        data = {}
-    elif request.content_type != "application/json":
+        if req_schema is not None:
+            raise Failure("validation_error", "Missing required request body.")
+        return {}
+    if request.content_type != "application/json":
         raise Failure("validation_error", "Write bodies must be Content-Type: application/json.")
-    else:
-        try:
-            data = json.loads(request.body)
-        except ValueError:
-            raise Failure("validation_error", "Body must be a JSON object.")
-    if not isinstance(data, dict):
+    try:
+        raw_data = json.loads(request.body)
+    except ValueError:
         raise Failure("validation_error", "Body must be a JSON object.")
-    unknown = sorted(set(data) - {name for name, _, _ in fields})
-    if unknown:
-        raise Failure("validation_error", f"Unknown fields: {', '.join(unknown)}.")
-    for name, kind, required in fields:
-        if name not in data:
-            if required:
-                raise Failure("validation_error", f"Missing required field: {name}.")
-            continue
-        value = data[name]
-        valid = {
-            "str": type(value) is str,
-            "int": type(value) is int,
-            "str?": value is None or type(value) is str,
-            "dt?": value is None or (type(value) is str and parse_datetime(value) is not None),
-        }[kind]
-        if not valid:
-            raise Failure("validation_error", f"Field {name} has an invalid value.")
-        if kind == "dt?":
-            data[name] = parse_datetime(value) if value else None
-    return data
+    if not isinstance(raw_data, dict):
+        raise Failure("validation_error", "Body must be a JSON object.")
+
+    if req_schema is None:
+        if raw_data:
+            raise Failure("validation_error", "Unexpected body for this operation.")
+        return {}
+
+    try:
+        model = req_schema.model_validate(raw_data)
+        return model.model_dump()
+    except ValidationError as exc:
+        for err in exc.errors():
+            field = str(err["loc"][0]) if err["loc"] else "body"
+            err_type = err["type"]
+            if err_type == "extra_forbidden":
+                raise Failure("validation_error", f"Unknown field: {field}.")
+            if err_type == "missing":
+                raise Failure("validation_error", f"Missing required field: {field}.")
+            raise Failure("validation_error", f"Field {field} has an invalid value: {err['msg']}.")
+        raise Failure("validation_error", "Request validation failed.")
 
 
 @csrf_exempt  # writes require a JSON content type; browsers use the CSRF-protected HTML pages
@@ -140,7 +154,8 @@ def dispatch(request, op_path, **path_params):
     by_method = _BY_PATH[op_path]
     if request.method not in by_method:
         return JsonResponse({"error": "validation_error", "message": "Method not allowed."}, status=405)
-    name, _, _, auth, fields, handler = by_method[request.method]
+    operation = by_method[request.method]
+    name, _, _, auth, req_schema, _resp_schema, handler = operation
     ctx = {"actor": "anonymous", "rid": request.headers.get("X-Request-ID", uuid.uuid4().hex[:12])}
     try:
         user = request.user
@@ -150,7 +165,7 @@ def dispatch(request, op_path, **path_params):
             if auth == "admin" and not user.is_staff:
                 raise Failure("forbidden", "Admin privileges required.")
             ctx.update(actor="admin" if user.is_staff else "customer", account_id=user.pk)
-        payload, status = handler(request, parse_body(request, fields), ctx, **path_params)
+        payload, status = handler(request, parse_body(request, req_schema), ctx, **path_params)
         ctx["outcome"] = "success"
         _audit(name, ctx)
         return JsonResponse(payload, status=status)
@@ -186,24 +201,26 @@ def _mine(model, pk, user):
     return obj
 
 
-def _list_op(name, op_path, auth, collection, model, serializer):
-    op(name, "GET", op_path, auth)(
+def _list_op(name, op_path, auth, collection, model, serializer, resp_schema):
+    op(name, "GET", op_path, auth, resp=resp_schema)(
         lambda request, data, ctx: ({collection: [serializer(x) for x in model.objects.order_by("pk")]}, 200)
     )
 
 
-def _get_op(name, op_path, auth, key, model, serializer):
-    op(name, "GET", op_path, auth)(lambda request, data, ctx, pk: ({key: serializer(_get(model, pk))}, 200))
+def _get_op(name, op_path, auth, key, model, serializer, resp_schema):
+    op(name, "GET", op_path, auth, resp=resp_schema)(
+        lambda request, data, ctx, pk: ({key: serializer(_get(model, pk))}, 200)
+    )
 
 
-@op("register", "POST", "auth/register", "anonymous", (("username", "str", True), ("password", "str", True)))
+@op("register", "POST", "auth/register", "anonymous", req=schemas.RegisterRequest, resp=schemas.AccountResponse)
 def register(request, data, ctx):
     user = services.register_account(data["username"], data["password"])
     ctx.update(actor="customer", account_id=user.pk)
     return {"account": account_json(user)}, 201
 
 
-@op("login", "POST", "auth/login", "anonymous", (("username", "str", True), ("password", "str", True)))
+@op("login", "POST", "auth/login", "anonymous", req=schemas.LoginRequest, resp=schemas.AccountResponse)
 def login_op(request, data, ctx):
     user = services.authenticate_account(request, data["username"], data["password"])
     login(request, user)
@@ -211,13 +228,13 @@ def login_op(request, data, ctx):
     return {"account": account_json(user)}, 200
 
 
-@op("logout", "POST", "auth/logout", "session")
+@op("logout", "POST", "auth/logout", "session", resp=schemas.OkResponse)
 def logout_op(request, data, ctx):
     logout(request)
     return {"ok": True}, 200
 
 
-@op("create_product", "POST", "products", "admin", (("code", "str", True), ("name", "str", True)))
+@op("create_product", "POST", "products", "admin", req=schemas.CreateProductRequest, resp=schemas.ProductResponse)
 def create_product(request, data, ctx):
     code = data["code"].strip()
     if not code:
@@ -229,10 +246,10 @@ def create_product(request, data, ctx):
     return {"product": product_json(product)}, 201
 
 
-@op("update_product", "PATCH", "products/{pk}", "admin", (("name", "str", False),))  # code never changes
+@op("update_product", "PATCH", "products/{pk}", "admin", req=schemas.UpdateProductRequest, resp=schemas.ProductResponse)
 def update_product(request, data, ctx, pk):
     product = _get(Product, pk)
-    if "name" in data:
+    if data.get("name") is not None:
         product.name = data["name"]
         product.save(update_fields=("name",))
     ctx["product_id"] = product.pk
@@ -244,7 +261,8 @@ def update_product(request, data, ctx, pk):
     "POST",
     "license-keys",
     "admin",
-    (("product_id", "int", True), ("max_devices", "int", True), ("expires_at", "dt?", False)),
+    req=schemas.IssueLicenseKeyRequest,
+    resp=schemas.IssueLicenseKeyResponse,
 )
 def issue_license_key(request, data, ctx):
     product = _get(Product, data["product_id"])
@@ -253,15 +271,22 @@ def issue_license_key(request, data, ctx):
     return {"key": key_json(key), "license_key": plaintext}, 201  # plaintext returned once, here only
 
 
-@op("revoke_license_key", "POST", "license-keys/{pk}/revoke", "admin")
+@op("revoke_license_key", "POST", "license-keys/{pk}/revoke", "admin", resp=schemas.LicenseKeyResponse)
 def revoke_license_key(request, data, ctx, pk):
     key = services.revoke_key(_get(LicenseKey, pk))
     ctx["product_id"] = key.product_id
     return {"key": key_json(key)}, 200
 
 
-@op("set_entitlement_status", "POST", "entitlements/{pk}/status", "admin", (("status", "str", True),))
-def set_entitlement_status(request, data, ctx, pk):  # max_devices/expires_at are unknown fields (Invariant 7)
+@op(
+    "set_entitlement_status",
+    "POST",
+    "entitlements/{pk}/status",
+    "admin",
+    req=schemas.SetEntitlementStatusRequest,
+    resp=schemas.EntitlementResponse,
+)
+def set_entitlement_status(request, data, ctx, pk):
     entitlement = _get(Entitlement, pk)
     if data["status"] not in ("active", "suspended", "revoked"):
         raise Failure("validation_error", "status must be active, suspended, or revoked.")
@@ -271,40 +296,40 @@ def set_entitlement_status(request, data, ctx, pk):  # max_devices/expires_at ar
     return {"entitlement": entitlement_json(entitlement)}, 200
 
 
-@op("unbind_device", "POST", "devices/{pk}/unbind", "admin")
+@op("unbind_device", "POST", "devices/{pk}/unbind", "admin", resp=schemas.DeviceResponse)
 def unbind_device(request, data, ctx, pk):
     device = services.unbind(_get(Device, pk))
     ctx.update(entitlement_id=device.entitlement_id, device_id=device.pk)
     return {"device": device_json(device)}, 200
 
 
-_list_op("list_products", "products", "admin", "products", Product, product_json)
-_list_op("list_license_keys", "license-keys", "admin", "license_keys", LicenseKey, key_json)
-_list_op("list_accounts", "accounts", "admin", "accounts", User, account_json)
-_list_op("list_entitlements", "entitlements", "admin", "entitlements", Entitlement, entitlement_json)
-_list_op("list_devices", "devices", "admin", "devices", Device, device_json)
-_get_op("get_product", "products/{pk}", "admin", "product", Product, product_json)
-_get_op("get_account", "accounts/{pk}", "admin", "account", User, account_json)
+_list_op("list_products", "products", "admin", "products", Product, product_json, schemas.ProductsListResponse)
+_list_op("list_license_keys", "license-keys", "admin", "license_keys", LicenseKey, key_json, schemas.LicenseKeysListResponse)
+_list_op("list_accounts", "accounts", "admin", "accounts", User, account_json, schemas.AccountsListResponse)
+_list_op("list_entitlements", "entitlements", "admin", "entitlements", Entitlement, entitlement_json, schemas.EntitlementsListResponse)
+_list_op("list_devices", "devices", "admin", "devices", Device, device_json, schemas.DevicesListResponse)
+_get_op("get_product", "products/{pk}", "admin", "product", Product, product_json, schemas.ProductResponse)
+_get_op("get_account", "accounts/{pk}", "admin", "account", User, account_json, schemas.AccountResponse)
 
 
-@op("redeem_license_key", "POST", "me/redeem", "session", (("license_key", "str", True),))
+@op("redeem_license_key", "POST", "me/redeem", "session", req=schemas.RedeemKeyRequest, resp=schemas.EntitlementResponse)
 def redeem_license_key(request, data, ctx):
     entitlement, created = services.redeem(request.user, data["license_key"])
     ctx.update(product_id=entitlement.product_id, entitlement_id=entitlement.pk)
     return {"entitlement": entitlement_json(entitlement)}, 201 if created else 200
 
 
-@op("list_my_entitlements", "GET", "me/entitlements", "session")
+@op("list_my_entitlements", "GET", "me/entitlements", "session", resp=schemas.EntitlementsListResponse)
 def list_my_entitlements(request, data, ctx):
     return {"entitlements": [entitlement_json(e) for e in request.user.entitlements.order_by("pk")]}, 200
 
 
-@op("get_my_entitlement", "GET", "me/entitlements/{pk}", "session")
+@op("get_my_entitlement", "GET", "me/entitlements/{pk}", "session", resp=schemas.EntitlementResponse)
 def get_my_entitlement(request, data, ctx, pk):
     return {"entitlement": entitlement_json(_mine(Entitlement, pk, request.user))}, 200
 
 
-@op("list_my_devices", "GET", "me/entitlements/{pk}/devices", "session")
+@op("list_my_devices", "GET", "me/entitlements/{pk}/devices", "session", resp=schemas.DevicesListResponse)
 def list_my_devices(request, data, ctx, pk):
     entitlement = _mine(Entitlement, pk, request.user)
     return {"devices": [device_json(d) for d in entitlement.devices.order_by("pk")]}, 200
@@ -315,7 +340,8 @@ def list_my_devices(request, data, ctx, pk):
     "POST",
     "me/entitlements/{pk}/devices",
     "session",
-    (("device_fingerprint", "str", True), ("display_name", "str?", False)),
+    req=schemas.BindDeviceRequest,
+    resp=schemas.DeviceResponse,
 )
 def bind_my_device(request, data, ctx, pk):
     entitlement = _mine(Entitlement, pk, request.user)
@@ -324,14 +350,21 @@ def bind_my_device(request, data, ctx, pk):
     return {"device": device_json(device)}, 201 if created else 200
 
 
-@op("unbind_my_device", "POST", "me/devices/{pk}/unbind", "session")
+@op("unbind_my_device", "POST", "me/devices/{pk}/unbind", "session", resp=schemas.DeviceResponse)
 def unbind_my_device(request, data, ctx, pk):
     device = services.unbind(_mine(Device, pk, request.user))
     ctx.update(entitlement_id=device.entitlement_id, device_id=device.pk)
     return {"device": device_json(device)}, 200
 
 
-@op("set_my_device_display_name", "PATCH", "me/devices/{pk}", "session", (("display_name", "str?", True),))
+@op(
+    "set_my_device_display_name",
+    "PATCH",
+    "me/devices/{pk}",
+    "session",
+    req=schemas.SetDeviceDisplayNameRequest,
+    resp=schemas.DeviceResponse,
+)
 def set_my_device_display_name(request, data, ctx, pk):
     device = _mine(Device, pk, request.user)
     device.display_name = data["display_name"]
@@ -345,7 +378,8 @@ def set_my_device_display_name(request, data, ctx, pk):
     "POST",
     "activate",
     "anonymous",
-    (("license_key", "str", True), ("device_fingerprint", "str", True), ("display_name", "str?", False)),
+    req=schemas.ActivateDeviceRequest,
+    resp=schemas.DeviceResponse,
 )
 def activate_device(request, data, ctx):
     ctx["actor"] = "application"
@@ -360,7 +394,8 @@ def activate_device(request, data, ctx):
     "POST",
     "validate",
     "anonymous",
-    (("license_key", "str", True), ("device_fingerprint", "str", True)),
+    req=schemas.ValidateDeviceRequest,
+    resp=schemas.ValidateDeviceResponse,
 )
 def validate_device(request, data, ctx):
     ctx["actor"] = "application"
@@ -371,7 +406,7 @@ def validate_device(request, data, ctx):
 
 _BY_PATH = {}
 for _entry in OPERATIONS:
-    _BY_PATH.setdefault(_entry[2], {})[_entry[1]] = _entry
+    _BY_PATH.setdefault(_entry.op_path, {})[_entry.method] = _entry
 urlpatterns = [
     path(f"api/{p.replace('{', '<int:').replace('}', '>')}", dispatch, {"op_path": p}) for p in _BY_PATH
 ]

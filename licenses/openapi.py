@@ -1,73 +1,83 @@
-"""OpenAPI document generated from the same OPERATIONS registry that produces
-the running HTTP implementation (Section 12).
+"""OpenAPI document generated using APISpec and PydanticPlugin.
+
+Automatically resolves schemas from Pydantic models for both requests and responses.
 """
 
+from apispec import APISpec
+from apispec_pydantic_plugin import PydanticPlugin
 from django.http import JsonResponse
 
-from .api import HTTP_STATUS, OPERATIONS
-
-_KIND_SCHEMA = {
-    "str": {"type": "string"},
-    "int": {"type": "integer"},
-    "str?": {"type": ["string", "null"]},
-    "dt?": {"type": ["string", "null"], "format": "date-time"},
-}
-_ERROR_SCHEMA = {
-    "type": "object",
-    "required": ["error", "message"],
-    "properties": {"error": {"type": "string", "enum": sorted(HTTP_STATUS)}, "message": {"type": "string"}},
-}
+from .api import OPERATIONS
+from .schemas import Error
 
 
-def build_openapi():
-    paths = {}
-    for name, method, op_path, auth, fields, _ in OPERATIONS:
-        spec = {
-            "operationId": name,
-            "summary": name.replace("_", " "),
-            "security": [] if auth == "anonymous" else [{"sessionCookie": []}],
-            "responses": {
-                str(code): {
-                    "description": cls,
-                    "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}},
-                }
-                for cls, code in HTTP_STATUS.items()
+def build_openapi() -> dict:
+    spec = APISpec(
+        title="License Service",
+        version="3.0.0",
+        openapi_version="3.1.0",
+        info={"description": "Single-tenant license key service."},
+        plugins=[PydanticPlugin()],
+    )
+
+    # Register Error schema under Error for standard error representation
+    spec.components.schema("Error", model=Error)
+    spec.components.security_scheme(
+        "sessionCookie", {"type": "apiKey", "in": "cookie", "name": "sessionid"}
+    )
+
+    for op in OPERATIONS:
+        path = f"/api/{op.op_path}"
+        method = op.method.lower()
+
+        success_code = "201" if (op.method == "POST" and "create" in op.name) or op.name in ("register", "issue_license_key") else "200"
+
+        responses = {
+            success_code: {
+                "description": "success",
+                "content": {
+                    "application/json": {
+                        "schema": op.resp_schema.__name__ if op.resp_schema else "Error"
+                    }
+                },
+            },
+            "default": {
+                "description": "error",
+                "content": {
+                    "application/json": {
+                        "schema": "Error"
+                    }
+                },
             },
         }
-        spec["responses"]["200" if method == "GET" else "200/201"] = {"description": "success"}
-        params = [seg[1:-1] for seg in op_path.split("/") if seg.startswith("{")]
-        if params:
-            spec["parameters"] = [
-                {"name": p, "in": "path", "required": True, "schema": {"type": "integer"}} for p in params
+
+        operation_dict = {
+            "operationId": op.name,
+            "summary": op.name.replace("_", " "),
+            "security": [] if op.auth == "anonymous" else [{"sessionCookie": []}],
+            "responses": responses,
+        }
+
+        path_params = [seg[1:-1] for seg in op.op_path.split("/") if seg.startswith("{")]
+        if path_params:
+            operation_dict["parameters"] = [
+                {"name": p, "in": "path", "required": True, "schema": {"type": "integer"}}
+                for p in path_params
             ]
-        if fields:
-            spec["requestBody"] = {
+
+        if op.req_schema:
+            operation_dict["requestBody"] = {
                 "required": True,
                 "content": {
                     "application/json": {
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": False,
-                            "required": [n for n, _, req in fields if req],
-                            "properties": {n: _KIND_SCHEMA[kind] for n, kind, _ in fields},
-                        }
+                        "schema": op.req_schema.__name__
                     }
                 },
             }
-        paths.setdefault(f"/api/{op_path}", {})[method.lower()] = spec
-    return {
-        "openapi": "3.1.0",
-        "info": {
-            "title": "License Service",
-            "version": "3.0.0",
-            "description": "Single-tenant license key service.",
-        },
-        "paths": paths,
-        "components": {
-            "schemas": {"Error": _ERROR_SCHEMA},
-            "securitySchemes": {"sessionCookie": {"type": "apiKey", "in": "cookie", "name": "sessionid"}},
-        },
-    }
+
+        spec.path(path=path, operations={method: operation_dict})
+
+    return spec.to_dict()
 
 
 def openapi_view(request):

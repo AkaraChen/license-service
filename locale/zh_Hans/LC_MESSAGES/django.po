@@ -172,6 +172,9 @@ msgstr "到期"
 msgid "Manage devices"
 msgstr "管理设备"
 
+msgid "No devices bound yet. Bind from the licensed application."
+msgstr "还没有已绑定设备。请在许可客户端中绑定。"
+
 msgid "No entitlements yet."
 msgstr "还没有授权。"
 

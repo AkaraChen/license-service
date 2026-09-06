@@ -31,11 +31,7 @@
 </table>
 </div>
 {% endif %}
-<h2>{% trans "Bind a new device" %}</h2>
-<form method="post" class="max-w-sm">
-  {% csrf_token %}
-  <label>{% trans "Device fingerprint" %} <input name="device_fingerprint" required maxlength="128"></label>
-  <label>{% trans "Display name (optional)" %} <input name="display_name"></label>
-  <button type="submit" class="btn-primary">{% trans "Bind device" %}</button>
-</form>
+{% if not devices %}
+<p>{% trans "No devices bound yet. Bind from the licensed application." %}</p>
+{% endif %}
 {% endblock %}

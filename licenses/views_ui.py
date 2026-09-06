@@ -1,5 +1,6 @@
 """Customer HTML pages (SPEC 3.1.4): register, login, logout, redeem,
-entitlement list, device list/bind/unbind/rename. Form posts invoke the same
+entitlement list, device list/unbind/rename. Bind happens in the licensed
+application (JSON API), not on these pages. Form posts invoke the same
 services.py mutations as the JSON operations (5.1.1). The Admin console is
 Django Admin at /admin/ and is never linked or exposed here.
 """
@@ -9,7 +10,7 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import redirect, render
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.translation import gettext as _
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_GET, require_POST
 
 from . import services
 from .models import Device, Entitlement
@@ -108,14 +109,10 @@ def _own(model, pk, user):
 
 
 @login_required(login_url="ui_login")
+@require_GET
 @_fail
 def entitlement_page(request, entitlement_id):
     entitlement = _own(Entitlement, entitlement_id, request.user)
-    if request.method == "POST":
-        services.bind(
-            entitlement, request.POST.get("device_fingerprint", ""), request.POST.get("display_name") or None
-        )
-        return redirect("ui_entitlement", entitlement_id=entitlement.pk)
     bound = entitlement.devices.filter(status="bound").count()
     return render(
         request,

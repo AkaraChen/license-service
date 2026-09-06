@@ -5,7 +5,7 @@ import re
 from django.test import Client
 
 from licenses import services
-from licenses.models import Device, Entitlement, LicenseKey
+from licenses.models import Entitlement, LicenseKey
 
 from .conftest import ADMIN_PW, ALICE_PW
 
@@ -54,13 +54,13 @@ def test_customer_pages_full_flow(db, customer, product):
 
     page = browser.get(f"/ui/entitlements/{entitlement.pk}")
     assert page.status_code == 200
-    response = browser.post(
-        f"/ui/entitlements/{entitlement.pk}",
-        {"device_fingerprint": "browser-machine", "display_name": "Laptop"},
-    )
-    assert response.status_code == 302
-    device = Device.objects.get()
-    assert device.status == "bound" and device.display_name == "Laptop"
+    assert b"Bind a new device" not in page.content
+    assert b'name="device_fingerprint"' not in page.content
+    assert browser.post(f"/ui/entitlements/{entitlement.pk}", {"device_fingerprint": "x"}).status_code == 405
+
+    device, _ = services.bind(entitlement, "browser-machine", "Laptop")
+    page = browser.get(f"/ui/entitlements/{entitlement.pk}")
+    assert b"Laptop" in page.content
 
     response = browser.post(f"/ui/devices/{device.pk}/unbind")
     assert response.status_code == 302

@@ -45,13 +45,13 @@ class JsonWritePolicyMiddleware:
     def process_view(self, request, view, args, kwargs):
         if not request.path.startswith("/api/") or request.method not in {"POST", "PATCH"}:
             return None
-        from .services import errors
+        from .services.errors import Forbidden, ValidationError
         from .views.api import handle_error
 
         origin = request.headers.get("Origin")
         if request.path not in {"/api/activate", "/api/validate"} and origin is not None:
             if origin != f"{request.scheme}://{request.get_host()}":
-                return handle_error(request, errors.forbidden("Cross-origin writes are not allowed."))
+                return handle_error(request, Forbidden("Cross-origin writes are not allowed."))
         if request.content_type != "application/json":
-            return handle_error(request, errors.validation_error("Write bodies must be application/json."))
+            return handle_error(request, ValidationError("Write bodies must be application/json."))
         return None

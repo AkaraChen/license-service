@@ -20,8 +20,16 @@ from redis.exceptions import RedisError
 
 from .. import accounts, services
 from ..models import Device, Entitlement, LicenseKey, Product
-from ..services import errors
-from ..services.errors import Failure
+from ..services.errors import (
+    Conflict,
+    Failure,
+    Forbidden,
+    NotFound,
+    RateLimited,
+    StoreUnavailable,
+    Unauthenticated,
+)
+from ..services.errors import ValidationError as LicenseValidationError
 from . import schemas as s
 
 
@@ -37,7 +45,7 @@ class AdminSession(SessionAuth):
     def authenticate(self, request, key):
         user = super().authenticate(request, key)
         if user is not None and not user.is_staff:
-            raise errors.forbidden("Admin privileges required.")
+            raise Forbidden("Admin privileges required.")
         return user
 
 
@@ -45,29 +53,25 @@ customer_session = SessionAuth(csrf=False)
 admin_session = AdminSession(csrf=False)
 
 
-def _as_failure(exc):
-    if isinstance(exc, Failure):
-        return exc
-    if isinstance(exc, AuthenticationError):
-        return errors.unauthenticated("A session cookie is required.")
-    if isinstance(exc, Http404):
-        return errors.not_found("Not found.")
-    if isinstance(exc, (OperationalError, RedisError)):
-        return errors.store_unavailable("The license store is unavailable.")
-    if isinstance(exc, IntegrityError):
-        return errors.conflict("The requested change conflicts with existing data.")
-    if isinstance(exc, Ratelimited):
-        return errors.rate_limited("Registration limit reached. Please try again later.")
-    return errors.validation_error("The request body is invalid or too large.")
-
-
 log = logging.getLogger(__name__)
 
 
 def handle_error(request, exc):
-    err = _as_failure(exc)
-    log.warning("api_error", extra={"outcome": err.code})
-    return JsonResponse({"error": err.code, "message": err.message}, status=err.status)
+    if not isinstance(exc, Failure):
+        if isinstance(exc, AuthenticationError):
+            exc = Unauthenticated("A session cookie is required.")
+        elif isinstance(exc, Http404):
+            exc = NotFound("Not found.")
+        elif isinstance(exc, (OperationalError, RedisError)):
+            exc = StoreUnavailable("The license store is unavailable.")
+        elif isinstance(exc, IntegrityError):
+            exc = Conflict("The requested change conflicts with existing data.")
+        elif isinstance(exc, Ratelimited):
+            exc = RateLimited("Registration limit reached. Please try again later.")
+        else:
+            exc = LicenseValidationError("The request body is invalid or too large.")
+    log.warning("api_error", extra={"outcome": exc.code})
+    return JsonResponse({"error": exc.code, "message": exc.message}, status=exc.status)
 
 
 for exception in (
@@ -102,7 +106,7 @@ def register(request, data: s.Credentials):
 def login(request, data: s.Credentials):
     form = AuthenticationForm(request, data=data.model_dump())
     if not form.is_valid():
-        raise errors.unauthenticated("Invalid username or password.")
+        raise Unauthenticated("Invalid username or password.")
     user = form.get_user()
     auth_login(request, user)
     log.info("login", extra={"account_id": user.pk})
@@ -119,7 +123,7 @@ def logout(request, data: s.Empty = s.Empty()):
 def create_product(request, data: s.ProductCreate):
     code = data.code.strip()
     if not code:
-        raise errors.validation_error("code must not be empty.")
+        raise LicenseValidationError("code must not be empty.")
     with transaction.atomic():
         product = Product.objects.create(code=code, name=data.name)
     log.info("create_product", extra={"product_id": product.pk})

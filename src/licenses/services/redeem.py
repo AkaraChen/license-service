@@ -2,7 +2,7 @@ from django.db import transaction
 from django.utils.translation import gettext
 
 from ..models import Entitlement, LicenseKey
-from . import errors
+from .errors import AlreadyEntitled, KeyAlreadyRedeemed, KeyRevoked, UnknownKey
 from .keys import hash_key
 
 
@@ -12,19 +12,15 @@ def redeem(account, plaintext):
     def work():
         key = LicenseKey.objects.select_for_update().filter(key_hash=hash_key(plaintext)).first()
         if key is None:
-            raise errors.unknown_key(gettext("This license key is not recognized."))
+            raise UnknownKey(gettext("This license key is not recognized."))
         if key.status == "revoked":
-            raise errors.key_revoked(gettext("This license key has been revoked."))
+            raise KeyRevoked(gettext("This license key has been revoked."))
         if key.status == "redeemed":
             if key.redeemed_by_id == account.id:
                 return key.entitlement, False
-            raise errors.key_already_redeemed(
-                gettext("This license key was already redeemed by another account.")
-            )
+            raise KeyAlreadyRedeemed(gettext("This license key was already redeemed by another account."))
         if Entitlement.objects.filter(account=account, product=key.product).exists():
-            raise errors.already_entitled(
-                gettext("This account already has an entitlement for this product.")
-            )
+            raise AlreadyEntitled(gettext("This account already has an entitlement for this product."))
         entitlement = Entitlement.objects.create(
             account=account,
             product=key.product,

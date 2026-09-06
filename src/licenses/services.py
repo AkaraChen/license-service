@@ -16,6 +16,26 @@ FINGERPRINT_MAX_LENGTH = 128
 _KEY_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789"  # 32 chars from 29 symbols: ~155 bits (4.1.3)
 
 
+HTTP_STATUS = {
+    "validation_error": 400,
+    "unauthenticated": 401,
+    "forbidden": 403,
+    "not_found": 404,
+    "unknown_key": 404,
+    "unknown_device": 404,
+    "conflict": 409,
+    "already_entitled": 409,
+    "key_already_redeemed": 409,
+    "key_revoked": 409,
+    "seat_exhausted": 409,
+    "entitlement_suspended": 409,
+    "entitlement_revoked": 409,
+    "entitlement_expired": 409,
+    "rate_limited": 429,
+    "store_unavailable": 503,
+}
+
+
 class Failure(Exception):
     """One SPEC Section 14.1 error class plus a human-readable message."""
 
@@ -23,6 +43,10 @@ class Failure(Exception):
         super().__init__(message)
         self.error = error
         self.message = message
+
+    @property
+    def status(self):
+        return HTTP_STATUS[self.error]
 
 
 def hash_key(plaintext):

@@ -88,13 +88,16 @@ class AuditMiddleware:
         # SPEC's JSON clients use same-origin checks instead of CSRF tokens.
         if not request.path.startswith("/api/") or request.method not in {"POST", "PATCH"}:
             return None
-        from .services import Failure
-        from .views.http import api_error
-
         origin = request.headers.get("Origin")
         if request.path not in {"/api/activate", "/api/validate"} and origin is not None:
             if origin != f"{request.scheme}://{request.get_host()}":
-                return api_error(request, Failure("forbidden", "Cross-origin writes are not allowed."))
+                resources(request, outcome="forbidden")
+                return JsonResponse(
+                    {"error": "forbidden", "message": "Cross-origin writes are not allowed."}, status=403
+                )
         if request.content_type != "application/json":
-            return api_error(request, Failure("validation_error", "Write bodies must be application/json."))
+            resources(request, outcome="validation_error")
+            return JsonResponse(
+                {"error": "validation_error", "message": "Write bodies must be application/json."}, status=400
+            )
         return None

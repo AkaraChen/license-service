@@ -16,7 +16,10 @@ class Empty(Schema):
     @classmethod
     def valid_text(cls, value):
         if isinstance(value, str):
-            services.validate_text(value)
+            try:
+                services.validate_text(value)
+            except services.Failure as exc:
+                raise ValueError(exc.message) from exc
         return value
 
 

@@ -13,23 +13,14 @@ from django.utils.translation import gettext
 from django_ratelimit.decorators import ratelimit
 
 from . import audit
-from .services import Failure, validate_text
+from .services import Failure
 
 MAX_ACCOUNTS = 10_000
-USERNAME_MAX_LENGTH = 150
 
 
 def register_account(username, password, request=None):
     """Open self-registration. Invariant 4: always is_admin=False."""
     username = (username or "").strip()
-    if not username or len(username) > USERNAME_MAX_LENGTH:
-        raise Failure("validation_error", gettext("username must be 1-150 characters."))
-    if not password:
-        raise Failure("validation_error", gettext("password must not be empty."))
-    if len(password) > 1024:
-        raise Failure("validation_error", "password exceeds 1024 characters.")
-    validate_text(username)
-    validate_text(password)
     if request is not None:
         admit_registration(request)
 

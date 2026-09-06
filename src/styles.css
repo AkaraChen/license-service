@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-@source "../licenses/templates";
+@source "./licenses/templates";
 
 /* Vercel / Geist product UI (eric-design DNA). App surface: grayscale + one blue accent. */
 @theme {

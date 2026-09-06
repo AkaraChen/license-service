@@ -19,7 +19,7 @@ from unfold.widgets import (
     UnfoldAdminSplitDateTimeWidget,
 )
 
-from . import audit, services
+from . import accounts, audit, services
 from .models import Device, Entitlement, LicenseKey, Product
 
 BATCH_ISSUE_MAX = 50
@@ -192,6 +192,14 @@ class AccountAdmin(AuditedAdmin):
 
     list_display = ("username", "is_staff", "is_active", "date_joined")
     fields = ("username", "email", "is_staff", "is_active")
+
+    def save_model(self, request, obj, form, change):
+        previous = (
+            User.objects.filter(pk=obj.pk).values_list("is_active", flat=True).first() if change else None
+        )
+        super().save_model(request, obj, form, change)
+        if previous is not None and previous != obj.is_active:
+            accounts.drop_account_sessions(obj)
 
 
 @admin.register(Group)

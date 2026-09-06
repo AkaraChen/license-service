@@ -69,7 +69,7 @@ def test_restart_preserves_all_durable_rows(admin_api):
         capture_output=True,
         text=True,
         env=env,
-        cwd=Path(__file__).resolve().parents[2],
+        cwd=Path(__file__).resolve().parents[3],
         check=False,
     )
     assert out.returncode == 0, out.stderr

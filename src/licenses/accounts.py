@@ -3,6 +3,7 @@
 from django.contrib.auth import get_user_model
 from django.contrib.auth.backends import ModelBackend
 from django.contrib.auth.models import User
+from django.contrib.sessions.models import Session
 from django.core.cache import cache
 from django.db import IntegrityError
 from django.db.models import Value
@@ -44,6 +45,24 @@ def register_account(username, password, request=None):
             return _atomic(work)
     except IntegrityError:
         raise Failure("conflict", gettext("This username is already taken.")) from None
+
+
+def drop_account_sessions(account):
+    """Delete this account's server-side sessions. Call after is_active changes."""
+    account_id = str(account.pk)
+    for session in Session.objects.iterator():
+        if session.get_decoded().get("_auth_user_id") == account_id:
+            session.delete()
+
+
+def set_account_active(account, active):
+    """Set is_active and drop sessions when the flag actually changes."""
+    if account.is_active == active:
+        return account
+    account.is_active = active
+    account.save(update_fields=("is_active",))
+    drop_account_sessions(account)
+    return account
 
 
 def canonical_username(username):

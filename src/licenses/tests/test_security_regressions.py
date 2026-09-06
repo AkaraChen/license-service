@@ -81,13 +81,22 @@ def test_inactive_accounts_never_get_a_session(db, customer, adapter):
     assert client.get("/api/me/entitlements").status_code == 401
 
 
-def test_activation_changes_invalidate_existing_sessions(db, customer_api, customer):
+def test_activation_changes_invalidate_existing_sessions(db, admin, customer_api, customer):
     old_cookie = customer_api.client.cookies["sessionid"].value
-    customer.is_active = False
-    customer.save(update_fields=("is_active",))
-    customer.is_active = True
-    customer.save(update_fields=("is_active",))
+    staff = Client()
+    staff.force_login(admin)
+    assert (
+        staff.post(
+            f"/admin/auth/user/{customer.pk}/change/",
+            {"username": customer.username, "email": "", "_save": "Save"},
+        ).status_code
+        == 302
+    )
+    customer.refresh_from_db()
+    assert customer.is_active is False
     assert not Session.objects.filter(session_key=old_cookie).exists()
+    assert customer_api.get("me/entitlements").status_code == 401
+    accounts.set_account_active(customer, True)
     assert customer_api.get("me/entitlements").status_code == 401
 
 

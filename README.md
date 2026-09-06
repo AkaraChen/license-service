@@ -16,7 +16,7 @@ uv run python manage.py createsuperuser        # bootstrap: the only way to crea
 just serve                                     # migrate + Tailwind watcher + runserver (127.0.0.1:8000)
 ```
 
-Customer HTML pages use Tailwind CSS 4 via [django-tailwind-cli](https://github.com/django-commons/django-tailwind-cli) (standalone CLI, no Node). Source is `src/styles.css`; the compiled sheet is `assets/css/tailwind.css`. Rebuild with `just css`, or let `just serve` watch.
+Customer HTML pages use Tailwind CSS 4 via [django-tailwind-cli](https://github.com/django-commons/django-tailwind-cli) (standalone CLI, no Node). Source is `src/styles.css` (next to the Django app); the compiled sheet is `assets/css/tailwind.css`. Rebuild with `just css`, or let `just serve` watch.
 
 Then open:
 
@@ -67,7 +67,7 @@ also rejects an unreachable database (`licenses.E002`).
   Conformance runs on SQLite; PostgreSQL is supported through the same ORM layer
   (run the suite with `LICENSE_DATABASE_URL=postgresql://…` for the Real Integration
   Profile).
-- **Admin UI generator**: Django Admin (`licenses/admin.py`).
+- **Admin UI generator**: Django Admin (`src/licenses/admin.py`).
 - **UI language**: Django gettext, `en` and `zh-hans`. `LocaleMiddleware` picks
   the language from `Accept-Language`; there is no in-page switcher. Machine
   `error` class names stay English.
@@ -110,9 +110,10 @@ also rejects an unreachable database (`licenses.E002`).
   source independently, using shared Redis counters via `django-redis`. Five
   failures lock further logins; entries expire 15 minutes after the last counted
   failure. Attempts during lockout do not extend it, and successful logins do not
-  reset counters (including other failures from that source). Existing sessions
-  survive a lockout. Inactive accounts never authenticate; activation changes
-  invalidate stored sessions. Project code only normalizes account names and
+  reset counters (including other failures from that source).   Existing sessions
+  survive a lockout. Inactive accounts never authenticate; Admin (and
+  `accounts.set_account_active`) drop that account's sessions when `is_active`
+  changes. Project code only normalizes account names and
   preserves the adapters' generic invalid-credentials response.
 - **Registration abuse controls**: `django-ratelimit` decorators enforce shared
   source/global hourly limits before password hashing. HTML uses the package's
@@ -170,23 +171,27 @@ See [the finding-by-finding repair and validation record](docs/security-scan-202
 
 ## Code layout and audit budget
 
-Django Ninja routers in `licenses/api.py` declare the 25 machine operations.
-Pydantic request schemas and explicit response field allowlists live in
-`licenses/schemas.py`; `licenses/http.py` retains the license-specific error
-contract and staff flag. The existing audit middleware handles all adapters
-and the current JSON same-origin policy. Ninja generates `/openapi.json` and `/docs`.
-There is no operation registry, custom JSON type parser or OpenAPI builder.
+The Django app lives in `src/licenses` with MTV in three packages: `models/`,
+`templates/`, and `views/` (`customer.py` HTML, `api.py` JSON). The Admin console
+stays in `src/licenses/admin.py`.
+Django Ninja routers in `src/licenses/views/api.py` declare the 25 machine operations.
+Pydantic request schemas live in `src/licenses/views/schemas.py`; `views/http.py`
+retains the license-specific error contract and staff flag. The existing audit
+middleware handles all adapters and the current JSON same-origin policy. Ninja
+generates `/openapi.json` and `/docs`. There is no operation registry, custom JSON
+type parser or OpenAPI builder.
 
-`licenses/services.py` and `licenses/models.py` own licensing state transitions
+`src/licenses/services.py` and `src/licenses/models/` own licensing state transitions
 and persistence. Customer pages call those services; Django authentication views
-and forms own login/logout. `licenses/forms.py` declares Customer registration,
-redemption and device-name fields; templates render their bound fields and errors. Existing rate-limit, audit and session-invalidation
-adapters remain in `accounts.py`, `audit.py` and `signals.py`.
+and forms own login/logout. `src/licenses/views/forms.py` declares Customer
+registration, redemption and device-name fields; templates render their bound fields
+and errors. Existing rate-limit, audit and session-invalidation adapters remain in
+`accounts.py` and `audit.py`.
 
 For an honest audit budget include the schemas, HTTP adapter and shared audit middleware:
 
 ```bash
-scc --no-cocomo --no-size licenses/api.py licenses/http.py licenses/schemas.py licenses/audit.py
+scc --no-cocomo --no-size src/licenses/views/api.py src/licenses/views/http.py src/licenses/views/schemas.py src/licenses/audit.py
 ```
 
 ## Tests

@@ -15,10 +15,10 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.translation import gettext as _
 from django.views.decorators.http import require_GET, require_POST
 
-from . import accounts, audit, services
+from .. import accounts, audit, services
+from ..models import Device, Entitlement
+from ..services import Failure
 from .forms import DeviceNameForm, RedeemForm, RegistrationForm
-from .models import Device, Entitlement
-from .services import Failure
 
 
 def _safe_next(request):

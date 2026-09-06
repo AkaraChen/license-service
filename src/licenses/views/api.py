@@ -9,11 +9,11 @@ from django.views.decorators.cache import never_cache
 from ninja import Router, Status
 from ninja.decorators import decorate_view
 
-from . import accounts, audit, services
+from .. import accounts, audit, services
+from ..models import Device, Entitlement, LicenseKey, Product
+from ..services import Failure
 from . import schemas as s
 from .http import admin_session, api, customer_session
-from .models import Device, Entitlement, LicenseKey, Product
-from .services import Failure
 
 admin = Router(auth=admin_session)
 customer = Router(auth=customer_session)

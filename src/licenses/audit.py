@@ -88,8 +88,8 @@ class AuditMiddleware:
         # SPEC's JSON clients use same-origin checks instead of CSRF tokens.
         if not request.path.startswith("/api/") or request.method not in {"POST", "PATCH"}:
             return None
-        from .http import api_error
         from .services import Failure
+        from .views.http import api_error
 
         origin = request.headers.get("Origin")
         if request.path not in {"/api/activate", "/api/validate"} and origin is not None:

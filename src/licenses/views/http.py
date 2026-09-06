@@ -9,8 +9,8 @@ from ninja.errors import AuthenticationError, HttpError, ValidationError
 from ninja.security import SessionAuth
 from redis.exceptions import RedisError
 
-from . import audit
-from .services import Failure
+from .. import audit
+from ..services import Failure
 
 HTTP_STATUS = {
     "validation_error": 400,

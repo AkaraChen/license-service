@@ -1,6 +1,7 @@
 """Production defaults; local development opts in with LICENSE_DEBUG=1."""
 
 import os
+import sys
 from datetime import timedelta
 from pathlib import Path
 
@@ -9,6 +10,9 @@ from django.core.exceptions import ImproperlyConfigured
 from django.templatetags.static import static
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+SRC_DIR = BASE_DIR / "src"
+if str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
 
 DEBUG = os.environ.get("LICENSE_DEBUG", "0") == "1"
 SECRET_KEY = os.environ.get("LICENSE_SESSION_SECRET", "")

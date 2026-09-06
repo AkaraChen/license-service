@@ -4,8 +4,8 @@ import json
 
 from django.contrib.auth.models import User
 
-from licenses.http import HTTP_STATUS
 from licenses.models import Device
+from licenses.views.http import HTTP_STATUS
 
 from .conftest import error_class
 

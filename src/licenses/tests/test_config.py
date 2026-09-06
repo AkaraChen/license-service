@@ -6,7 +6,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-BASE = str(Path(__file__).resolve().parents[2])
+BASE = str(Path(__file__).resolve().parents[3])
 
 
 def run_manage(*args, **env_overrides):

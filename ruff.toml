@@ -12,4 +12,5 @@ split-on-trailing-comma = false
 
 [lint.per-file-ignores]
 # Django migrations and Model.Meta use list class attributes by convention.
-"licenses/migrations/*" = ["RUF012"]
+"src/licenses/migrations/*" = ["RUF012"]
+"src/licenses/models/*" = ["RUF012"]

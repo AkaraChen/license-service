@@ -6,7 +6,7 @@ from typing import Annotated, Literal
 from ninja import Schema
 from pydantic import BeforeValidator, ConfigDict, Field, StrictStr, TypeAdapter, field_validator
 
-from . import services
+from .. import services
 
 
 class Empty(Schema):

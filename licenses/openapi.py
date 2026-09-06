@@ -1,73 +1,55 @@
-"""OpenAPI document generated from the same OPERATIONS registry that produces
-the running HTTP implementation (Section 12).
-"""
+"""OpenAPI 3.1 document generated from OPERATIONS and Pydantic response models."""
+
+from functools import cache
 
 from django.http import JsonResponse
 
+from openapi_gen import OpenAPIBuilder
+
 from .api import HTTP_STATUS, OPERATIONS
-
-_KIND_SCHEMA = {
-    "str": {"type": "string"},
-    "int": {"type": "integer"},
-    "str?": {"type": ["string", "null"]},
-    "dt?": {"type": ["string", "null"], "format": "date-time"},
-}
-_ERROR_SCHEMA = {
-    "type": "object",
-    "required": ["error", "message"],
-    "properties": {"error": {"type": "string", "enum": sorted(HTTP_STATUS)}, "message": {"type": "string"}},
-}
+from .schemas import ErrorBody
 
 
+def _tags(name, auth):
+    if name in {"activate_device", "validate_device"}:
+        return ["Application"]
+    if auth == "admin":
+        return ["Admin"]
+    return ["Customer"]
+
+
+def _error_schema():
+    schema = ErrorBody.model_json_schema(mode="serialization")
+    schema.pop("$schema", None)
+    schema.pop("$defs", None)
+    schema["properties"]["error"] = {"type": "string", "enum": sorted(HTTP_STATUS)}
+    schema["required"] = ["error", "message"]
+    return schema
+
+
+@cache
 def build_openapi():
-    paths = {}
-    for name, method, op_path, auth, fields, _ in OPERATIONS:
-        spec = {
-            "operationId": name,
-            "summary": name.replace("_", " "),
-            "security": [] if auth == "anonymous" else [{"sessionCookie": []}],
-            "responses": {
-                str(code): {
-                    "description": cls,
-                    "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}},
-                }
-                for cls, code in HTTP_STATUS.items()
-            },
-        }
-        spec["responses"]["200" if method == "GET" else "200/201"] = {"description": "success"}
-        params = [seg[1:-1] for seg in op_path.split("/") if seg.startswith("{")]
-        if params:
-            spec["parameters"] = [
-                {"name": p, "in": "path", "required": True, "schema": {"type": "integer"}} for p in params
-            ]
-        if fields:
-            spec["requestBody"] = {
-                "required": True,
-                "content": {
-                    "application/json": {
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": False,
-                            "required": [n for n, _, req in fields if req],
-                            "properties": {n: _KIND_SCHEMA[kind] for n, kind, _ in fields},
-                        }
-                    }
-                },
-            }
-        paths.setdefault(f"/api/{op_path}", {})[method.lower()] = spec
-    return {
-        "openapi": "3.1.0",
-        "info": {
-            "title": "License Service",
-            "version": "3.0.0",
-            "description": "Single-tenant license key service.",
-        },
-        "paths": paths,
-        "components": {
-            "schemas": {"Error": _ERROR_SCHEMA},
-            "securitySchemes": {"sessionCookie": {"type": "apiKey", "in": "cookie", "name": "sessionid"}},
-        },
-    }
+    builder = OpenAPIBuilder(
+        title="License Service", version="3.0.0", description="Single-tenant license key service."
+    )
+    builder.add_tag("Admin", "Administrator session operations")
+    builder.add_tag("Customer", "Customer session and registration")
+    builder.add_tag("Application", "Licensed application calls (no Account session)")
+    builder.cookie_auth("sessionCookie", "sessionid")
+    builder.component_schema("Error", _error_schema())
+    for name, method, op_path, auth, fields, _handler, responses in OPERATIONS:
+        builder.add_operation(
+            operation_id=name,
+            method=method,
+            path=f"/api/{op_path}",
+            fields=fields,
+            success=responses,
+            security=[] if auth == "anonymous" else [{"sessionCookie": []}],
+            errors=HTTP_STATUS,
+            tags=_tags(name, auth),
+            path_param_schema={"type": "integer"},
+        )
+    return builder.build()
 
 
 def openapi_view(request):

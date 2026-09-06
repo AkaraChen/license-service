@@ -2,10 +2,16 @@
 
 import json
 import logging
+import re
+
+from openapi_spec_validator import validate
 
 from licenses.api import OPERATIONS
+from licenses.openapi import build_openapi
 
 from .conftest import ALICE_PW
+
+_OAS_STATUS = re.compile(r"^(default|[1-5](?:XX|[0-9]{2}))$")
 
 EXPECTED_OPERATIONS = {
     "create_product",
@@ -40,9 +46,37 @@ def test_openapi_served_and_lists_every_operation(api):
     response = api.client.get("/openapi.json")  # served by the same process
     assert response.status_code == 200
     document = json.loads(response.content)
-    served = {spec["operationId"] for path in document["paths"].values() for spec in path.values()}
+    served = {
+        spec["operationId"]
+        for path in document["paths"].values()
+        for key, spec in path.items()
+        if key in {"get", "put", "post", "delete", "options", "head", "patch", "trace"}
+    }
     assert served == EXPECTED_OPERATIONS
-    assert served == {name for name, *_ in OPERATIONS}  # generated, not handwritten
+    assert served == {name for name, *_ in OPERATIONS}  # generated from the registry
+    from licenses.schemas import RESPONSES
+
+    assert set(RESPONSES) == served
+
+
+def test_openapi_is_valid_openapi_31_and_uses_pydantic_responses(api):
+    document = json.loads(api.client.get("/openapi.json").content)
+    assert document == build_openapi()
+    validate(document)  # official OpenAPI 3.1 schema
+    for path_item in document["paths"].values():
+        for key, spec in path_item.items():
+            if key not in {"get", "put", "post", "delete", "options", "head", "patch", "trace"}:
+                continue
+            for status in spec["responses"]:
+                assert _OAS_STATUS.fullmatch(status), status
+            success = [spec["responses"][code] for code in spec["responses"] if code.startswith("2")]
+            assert success
+            for response in success:
+                assert "$ref" in response["content"]["application/json"]["schema"]
+    assert "200/201" not in json.dumps(document)
+    components = document["components"]["schemas"]
+    for name in ("Account", "Product", "LicenseKey", "Entitlement", "Device", "Error", "ValidateResponse"):
+        assert name in components
 
 
 def test_openapi_describes_error_envelope_and_write_fields(api):
@@ -58,12 +92,12 @@ def test_openapi_describes_error_envelope_and_write_fields(api):
         "/api/validate": {"license_key", "device_fingerprint"},
     }
     for path, fields in expected_fields.items():
-        spec = next(iter(document["paths"][path].values()))
+        spec = next(spec for key, spec in document["paths"][path].items() if key in {"get", "post", "patch"})
         schema = spec["requestBody"]["content"]["application/json"]["schema"]
         assert set(schema["properties"]) == fields
         assert schema["additionalProperties"] is False
-    validate = document["paths"]["/api/validate"]["post"]
-    assert validate["security"] == []  # no session cookie for application calls
+    validate_op = document["paths"]["/api/validate"]["post"]
+    assert validate_op["security"] == []  # no session cookie for application calls
 
 
 def test_mutating_calls_log_actor_and_outcome(api, customer_api, redeemed, caplog):

@@ -23,7 +23,7 @@ Then open:
 | `/admin/` | Admin console (Django Admin, `is_staff` sessions only) |
 | `/ui/register`, `/ui/login` | Customer self-service pages |
 | `/` | Customer entitlement list (login required) |
-| `/openapi.json` | OpenAPI 3.1 document, generated from the operation registry |
+| `/openapi.json` | OpenAPI 3.1 document, generated from the registry + Pydantic models |
 | `/api/...` | JSON machine API (25 operations, SPEC Section 11) |
 
 ## Configuration (SPEC Section 6)
@@ -109,34 +109,39 @@ blank lines excluded).
 
 The auditable core — entities and invariants (`models.py`), the Section 7 state
 machines (`services.py`), and the HTTP contract with validation, authorization, and
-audit logging (`api.py`) — is **488 code lines**, within the 500-line budget.
-Everything else is thin presentation derived from the same registry/services.
+audit logging (`api.py`) — stays within the 500-line budget. Everything else is
+thin presentation derived from the same registry, Pydantic response models, and
+services. Handlers return those models; `openapi_gen` builds an OpenAPI 3.1
+document and validates it against the official schema (so constructs like
+`200/201` cannot be served).
 
 | File | Code lines (scc) | Layer |
 | --- | --- | --- |
-| `licenses/models.py` | 50 | Persistence (entities, uniqueness invariants) |
-| `licenses/services.py` | 141 | Policy (redeem/bind/unbind/validate, seats) |
-| `licenses/api.py` | 297 | Coordination (25 ops, validation, authz, logging) |
-| **core subtotal** | **488** | |
-| `licenses/openapi.py` | 95 | Presentation (OpenAPI from the registry) |
-| `licenses/views_ui.py` | 98 | Presentation (Customer HTML pages) |
-| `licenses/admin.py` | 89 | Presentation (Admin console config) |
-| `licenses/apps.py` | 26 | Startup preflight checks |
+| `licenses/models.py` | 47 | Persistence (entities, uniqueness invariants) |
+| `licenses/services.py` | 140 | Policy (redeem/bind/unbind/validate, seats) |
+| `licenses/api.py` | 260 | Coordination (25 ops, validation, authz, logging) |
+| **core subtotal** | **447** | |
+| `licenses/schemas.py` | 181 | Presentation (Pydantic response models) |
+| `licenses/openapi.py` | 43 | Presentation (OpenAPI from the registry + models) |
+| `openapi_gen/` | 211 | OpenAPI 3.1 builder + official spec validation |
+| `licenses/views_ui.py` | 109 | Presentation (Customer HTML pages) |
+| `licenses/admin.py` | 120 | Presentation (Admin console config) |
+| `licenses/apps.py` | 23 | Startup preflight checks |
 | `config/`, `manage.py` | 118 | Standard Django project scaffolding |
 | `licenses/templates/` | — | HTML (Django templates + Tailwind) |
 | `src/styles.css` | — | Tailwind source (compiled to `assets/css/tailwind.css`) |
-| `licenses/tests/` | 815 | pytest suite (not counted as core) |
+| `licenses/tests/` | — | pytest suite (not counted as core) |
 
 Reproduce: `scc --no-cocomo --no-size licenses/models.py licenses/services.py licenses/api.py`
 
 ## Tests
 
 ```bash
-uv run pytest                 # 80 tests
+uv run pytest                 # 92 tests
 uv run ruff format --check . && uv run ruff check .   # style and lint gates
 ```
 
-80 tests, organized by SPEC Section 17:
+Tests, organized by SPEC Section 17:
 
 - `test_parsing.py` — 17.2: unknown/missing/typed fields, envelope shape, status
   mapping, session requirements, empty-list behavior.
@@ -149,8 +154,11 @@ uv run ruff format --check . && uv run ruff check .   # style and lint gates
   cross-process restart durability; durable sessions.
 - `test_immutability.py` — 17.6: no operation mutates `max_devices`/`expires_at`;
   8-thread concurrent bind race never exceeds `max_devices`.
-- `test_openapi_logs.py` — 17.7: served OpenAPI lists every operationId and matches
-  the registry; audit logs carry `actor`/`outcome`/`rid` and never secrets.
+- `test_openapi_logs.py` — 17.7: served OpenAPI lists every operationId, matches
+  the registry, and validates against the official OpenAPI 3.1 schema; audit logs
+  carry `actor`/`outcome`/`rid` and never secrets.
+- `test_openapi_gen.py` — the OpenAPI builder rejects illegal status keys such as
+  `200/201` and only emits documents the official schema accepts.
 - `test_html.py` — 17.8: Admin console gating, Customer page flow
   (register → redeem → bind → unbind), no Admin console exposure, plaintext shown once.
 - `test_config.py` — 17.8: `config_invalid` and unreachable store prevent startup.

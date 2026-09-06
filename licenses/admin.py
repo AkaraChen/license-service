@@ -3,11 +3,36 @@
 flash message and never stored; password hashes are never displayed.
 """
 
+from admin_extra_buttons.api import ExtraButtonsMixin, button
+from django import forms
 from django.contrib import admin, messages
+from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth.models import User
+from django.db import transaction
+from django.shortcuts import redirect
+from django.template.response import TemplateResponse
+from django.utils.translation import gettext_lazy as _
 
 from . import services
 from .models import Device, Entitlement, LicenseKey, Product
+
+BATCH_ISSUE_MAX = 50
+_ISSUED_ONCE_SESSION_KEY = "_issued_license_keys_once"
+
+
+class BatchIssueForm(forms.Form):
+    product = forms.ModelChoiceField(queryset=Product.objects.order_by("code"), label=_("Product"))
+    max_devices = forms.IntegerField(min_value=1, initial=1, label=_("Max devices"))
+    expires_at = forms.SplitDateTimeField(
+        required=False, widget=admin.widgets.AdminSplitDateTime(), label=_("Expires at")
+    )
+    count = forms.IntegerField(
+        min_value=1,
+        max_value=BATCH_ISSUE_MAX,
+        initial=1,
+        label=_("Number of keys"),
+        help_text=_("At most 50 keys per batch."),
+    )
 
 
 @admin.register(Product)
@@ -16,7 +41,7 @@ class ProductAdmin(admin.ModelAdmin):
 
 
 @admin.register(LicenseKey)
-class LicenseKeyAdmin(admin.ModelAdmin):
+class LicenseKeyAdmin(ExtraButtonsMixin, admin.ModelAdmin):
     list_display = (
         "key_prefix",
         "product",
@@ -41,6 +66,37 @@ class LicenseKeyAdmin(admin.ModelAdmin):
     def revoke_keys(self, request, queryset):
         for key in queryset:
             services.revoke_key(key)
+
+    @button(
+        label=_("Issue batch"),
+        permission="licenses.add_licensekey",
+        change_list=True,
+        change_form=False,
+        decorators=[staff_member_required],
+    )
+    def issue_batch(self, request):
+        context = self.get_common_context(request, title=_("Issue batch"))
+        issued = request.session.pop(_ISSUED_ONCE_SESSION_KEY, None)
+        if issued is not None:
+            context["issued"] = issued
+            return TemplateResponse(request, "admin/licenses/licensekey/issue_batch.html", context)
+
+        form = BatchIssueForm(request.POST or None)
+        if request.method == "POST" and form.is_valid():
+            product = form.cleaned_data["product"]
+            max_devices = form.cleaned_data["max_devices"]
+            expires_at = form.cleaned_data["expires_at"]
+            count = form.cleaned_data["count"]
+            keys = []
+            with transaction.atomic():
+                for _n in range(count):
+                    _key, plaintext = services.issue_key(product, max_devices, expires_at)
+                    keys.append(plaintext)
+            request.session[_ISSUED_ONCE_SESSION_KEY] = keys
+            return redirect("admin:licenses_licensekey_issue_batch")
+
+        context["form"] = form
+        return TemplateResponse(request, "admin/licenses/licensekey/issue_batch.html", context)
 
 
 @admin.register(Entitlement)

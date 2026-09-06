@@ -1,9 +1,11 @@
 """SPEC 17.8: HTML UI and host lifecycle; Section 3.1.4 page requirements."""
 
+import re
+
 from django.test import Client
 
 from licenses import services
-from licenses.models import Device, Entitlement
+from licenses.models import Device, Entitlement, LicenseKey
 
 from .conftest import ADMIN_PW, ALICE_PW
 
@@ -95,6 +97,67 @@ def test_admin_console_issue_key_shows_plaintext_once(db, admin, product):
     assert "lic_" in body  # issuing response shows plaintext once
     again = staff.get("/admin/licenses/licensekey/").content.decode()
     assert "lic_" not in again.split("key_prefix")[0] or "shown once" not in again
+
+
+def test_admin_console_batch_issue_requires_admin_session(db, customer):
+    path = "/admin/licenses/licensekey/issue_batch/"
+    anonymous = Client().get(path)
+    assert anonymous.status_code == 302 and "/admin/login" in anonymous["Location"]
+
+    non_admin = Client()
+    non_admin.login(username="alice", password=ALICE_PW)
+    response = non_admin.get(path)
+    assert response.status_code == 302 and "/admin/login" in response["Location"]
+
+
+def test_admin_console_batch_issue_creates_keys_and_shows_plaintext_once(db, admin, product):
+    staff = Client()
+    staff.login(username="root", password=ADMIN_PW)
+
+    changelist = staff.get("/admin/licenses/licensekey/").content.decode()
+    assert "Issue batch" in changelist
+    assert "/admin/licenses/licensekey/issue_batch/" in changelist
+
+    form_page = staff.get("/admin/licenses/licensekey/issue_batch/")
+    assert form_page.status_code == 200
+    form_body = form_page.content.decode()
+    assert 'name="product"' in form_body
+    assert 'name="max_devices"' in form_body
+    assert 'name="count"' in form_body
+
+    rejected = staff.post(
+        "/admin/licenses/licensekey/issue_batch/", {"product": product.pk, "max_devices": "2", "count": "51"}
+    )
+    assert rejected.status_code == 200
+    assert LicenseKey.objects.count() == 0
+
+    response = staff.post(
+        "/admin/licenses/licensekey/issue_batch/",
+        {"product": product.pk, "max_devices": "2", "count": "3"},
+        follow=True,
+    )
+    assert response.status_code == 200
+    body = response.content.decode()
+    keys = re.findall(r"<code>(lic_[a-z0-9]{32})</code>", body)
+    assert len(keys) == 3
+    assert LicenseKey.objects.count() == 3
+    assert all(key.startswith("lic_") and len(key) == 36 for key in keys)
+
+    reload_result = staff.get("/admin/licenses/licensekey/issue_batch/").content.decode()
+    for key in keys:
+        assert key not in reload_result
+    assert LicenseKey.objects.count() == 3  # refresh does not issue another batch
+
+    again = staff.get("/admin/licenses/licensekey/").content.decode()
+    for key in keys:
+        assert key not in again
+        assert key[:12] in again
+
+    zh = Client()
+    zh.login(username="root", password=ADMIN_PW)
+    zh_page = zh.get("/admin/licenses/licensekey/issue_batch/", HTTP_ACCEPT_LANGUAGE="zh-hans")
+    assert zh_page.status_code == 200
+    assert "批量签发" in zh_page.content.decode()
 
 
 def test_admin_console_never_shows_password_hash(db, admin):

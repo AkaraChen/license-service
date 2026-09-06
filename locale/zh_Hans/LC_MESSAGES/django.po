@@ -195,3 +195,24 @@ msgstr "创建账户"
 
 msgid "Not found."
 msgstr "未找到。"
+
+msgid "Issue batch"
+msgstr "批量签发"
+
+msgid "Issue keys"
+msgstr "签发密钥"
+
+msgid "Max devices"
+msgstr "最大设备数"
+
+msgid "Expires at"
+msgstr "到期时间"
+
+msgid "Number of keys"
+msgstr "密钥数量"
+
+msgid "At most 50 keys per batch."
+msgstr "每批最多 50 个密钥。"
+
+msgid "These license keys are shown once. Only the hash is kept after you leave this page."
+msgstr "这些许可证密钥仅显示一次。离开此页面后仅保留哈希。"

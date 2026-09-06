@@ -1,0 +1,37 @@
+{% extends "admin_extra_buttons/action_page.html" %}
+{% load i18n %}
+
+{% block extrahead %}
+{{ block.super }}
+{% if form %}{{ form.media }}{% endif %}
+{% endblock %}
+
+{% block action-content %}
+{% if issued %}
+  <p>{% trans "These license keys are shown once. Only the hash is kept after you leave this page." %}</p>
+  <ul>
+    {% for key in issued %}
+      <li><code>{{ key }}</code></li>
+    {% endfor %}
+  </ul>
+{% else %}
+  <form method="post" novalidate>
+    {% csrf_token %}
+    <fieldset class="module aligned">
+      {% for field in form %}
+        <div class="form-row{% if field.errors %} errors{% endif %}">
+          {{ field.errors }}
+          <div>
+            {{ field.label_tag }}
+            {{ field }}
+            {% if field.help_text %}<div class="help">{{ field.help_text }}</div>{% endif %}
+          </div>
+        </div>
+      {% endfor %}
+    </fieldset>
+    <div class="submit-row">
+      <input type="submit" value="{% trans 'Issue keys' %}" class="default">
+    </div>
+  </form>
+{% endif %}
+{% endblock %}

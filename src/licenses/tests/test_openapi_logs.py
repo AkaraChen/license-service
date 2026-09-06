@@ -48,14 +48,25 @@ def test_mutating_calls_log_events(api, customer_api, redeemed, caplog):
         customer_api.post("me/redeem", {"license_key": plaintext})
         api.post("activate", {"license_key": plaintext, "device_fingerprint": "m1"})
         api.post("validate", {"license_key": plaintext, "device_fingerprint": "ghost"})
-    events = [
-        json.loads(r.getMessage())["event"]
-        for r in caplog.records
-        if r.name.startswith("licenses.") and r.getMessage().startswith("{")
-    ]
+    events = [r.getMessage() for r in caplog.records if r.name.startswith("licenses.")]
     assert "redeem" in events
     assert "activate" in events
     assert "api_error" in events
+
+
+def test_request_id_copied_from_header_only(api, caplog):
+    with caplog.at_level(logging.INFO):
+        api.client.generic(
+            "POST",
+            "/api/auth/login",
+            data=json.dumps({"username": "missing", "password": "secret"}),
+            content_type="application/json",
+            headers={"X-Request-ID": "client-rid-1"},
+        )
+        api.post("auth/login", {"username": "missing", "password": "secret"})
+    records = [r for r in caplog.records if r.name.startswith("licenses.") and r.getMessage() == "api_error"]
+    assert any(getattr(r, "request_id", None) == "client-rid-1" for r in records)
+    assert any(not getattr(r, "request_id", None) for r in records)
 
 
 def test_logs_never_contain_secrets_or_raw_fingerprints(

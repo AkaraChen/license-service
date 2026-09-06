@@ -1,6 +1,7 @@
 """Account registration and rate limiting."""
 
-import structlog
+import logging
+
 from django.contrib.auth.models import User
 from django.contrib.sessions.models import Session
 from django.core.cache import cache
@@ -13,7 +14,7 @@ from django_ratelimit.decorators import ratelimit
 
 from .services import Failure
 
-log = structlog.get_logger(__name__)
+log = logging.getLogger(__name__)
 
 MAX_ACCOUNTS = 10_000
 
@@ -68,7 +69,7 @@ def admit_registration(request):
 
 
 def ratelimited(request, exception):
-    log.warning("register", outcome="rate_limited")
+    log.warning("register", extra={"outcome": "rate_limited"})
     return render(
         request,
         "licenses/error.html",

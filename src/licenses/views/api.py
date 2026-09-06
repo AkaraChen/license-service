@@ -1,6 +1,7 @@
 """Machine endpoints; Django Ninja owns routing, parsing, serialization and OpenAPI."""
 
-import structlog
+import logging
+
 from django.contrib.auth import login as auth_login
 from django.contrib.auth import logout as auth_logout
 from django.contrib.auth.forms import AuthenticationForm
@@ -17,7 +18,7 @@ from ..services import Failure
 from . import schemas as s
 from .http import admin_session, api, customer_session
 
-log = structlog.get_logger(__name__)
+log = logging.getLogger(__name__)
 
 admin = Router(auth=admin_session)
 customer = Router(auth=customer_session)
@@ -27,7 +28,7 @@ public = Router()
 @public.post("/auth/register", response={201: dict[str, s.Account], **s.ERROR_RESPONSES})
 def register(request, data: s.Credentials):
     user = accounts.register_account(data.username, data.password, request=request)
-    log.info("register", account_id=user.pk)
+    log.info("register", extra={"account_id": user.pk})
     return Status(201, {"account": user})
 
 
@@ -38,7 +39,7 @@ def login(request, data: s.Credentials):
         raise Failure("unauthenticated", "Invalid username or password.")
     user = form.get_user()
     auth_login(request, user)
-    log.info("login", account_id=user.pk)
+    log.info("login", extra={"account_id": user.pk})
     return Status(200, {"account": user})
 
 
@@ -55,7 +56,7 @@ def create_product(request, data: s.ProductCreate):
         raise Failure("validation_error", "code must not be empty.")
     with transaction.atomic():
         product = Product.objects.create(code=code, name=data.name)
-    log.info("create_product", product_id=product.pk)
+    log.info("create_product", extra={"product_id": product.pk})
     return Status(201, {"product": product})
 
 
@@ -65,7 +66,7 @@ def update_product(request, pk: int, data: s.ProductUpdate):
     if "name" in data.model_fields_set:
         product.name = data.name
         product.save(update_fields=("name",))
-    log.info("update_product", product_id=product.pk)
+    log.info("update_product", extra={"product_id": product.pk})
     return Status(200, {"product": product})
 
 
@@ -74,14 +75,14 @@ def update_product(request, pk: int, data: s.ProductUpdate):
 def issue_license_key(request, data: s.KeyIssue):
     product = get_object_or_404(Product, pk=data.product_id)
     key, plaintext = services.issue_key(product, data.max_devices, data.expires_at)
-    log.info("issue", product_id=product.pk, key_id=key.pk)
+    log.info("issue", extra={"product_id": product.pk, "key_id": key.pk})
     return Status(201, {"key": key, "license_key": plaintext})
 
 
 @admin.post("/license-keys/{pk}/revoke", response={200: dict[str, s.Key], **s.ERROR_RESPONSES})
 def revoke_license_key(request, pk: int, data: s.Empty = s.Empty()):
     key = services.revoke_key(get_object_or_404(LicenseKey, pk=pk))
-    log.info("revoke", product_id=key.product_id, key_id=key.pk)
+    log.info("revoke", extra={"product_id": key.product_id, "key_id": key.pk})
     return Status(200, {"key": key})
 
 
@@ -90,14 +91,16 @@ def set_entitlement_status(request, pk: int, data: s.EntitlementStatus):
     entitlement = get_object_or_404(Entitlement, pk=pk)
     entitlement.status = data.status
     entitlement.save(update_fields=("status",))
-    log.info("entitlement_status", product_id=entitlement.product_id, entitlement_id=entitlement.pk)
+    log.info(
+        "entitlement_status", extra={"product_id": entitlement.product_id, "entitlement_id": entitlement.pk}
+    )
     return Status(200, {"entitlement": entitlement})
 
 
 @admin.post("/devices/{pk}/unbind", response={200: dict[str, s.Device], **s.ERROR_RESPONSES})
 def unbind_device(request, pk: int, data: s.Empty = s.Empty()):
     device = services.unbind(get_object_or_404(Device, pk=pk))
-    log.info("unbind", entitlement_id=device.entitlement_id, device_id=device.pk)
+    log.info("unbind", extra={"entitlement_id": device.entitlement_id, "device_id": device.pk})
     return Status(200, {"device": device})
 
 
@@ -141,7 +144,7 @@ def get_account(request, pk: int):
 )
 def redeem_license_key(request, data: s.Redeem):
     entitlement, created = services.redeem(request.user, data.license_key)
-    log.info("redeem", product_id=entitlement.product_id, entitlement_id=entitlement.pk)
+    log.info("redeem", extra={"product_id": entitlement.product_id, "entitlement_id": entitlement.pk})
     return Status(201 if created else 200, {"entitlement": entitlement})
 
 
@@ -168,14 +171,21 @@ def list_my_devices(request, pk: int):
 def bind_my_device(request, pk: int, data: s.DeviceBind):
     entitlement = get_object_or_404(Entitlement, pk=pk, account=request.user)
     device, created = services.bind(entitlement, data.device_fingerprint, data.display_name)
-    log.info("bind", product_id=entitlement.product_id, entitlement_id=entitlement.pk, device_id=device.pk)
+    log.info(
+        "bind",
+        extra={
+            "product_id": entitlement.product_id,
+            "entitlement_id": entitlement.pk,
+            "device_id": device.pk,
+        },
+    )
     return Status(201 if created else 200, {"device": device})
 
 
 @customer.post("/me/devices/{pk}/unbind", response={200: dict[str, s.Device], **s.ERROR_RESPONSES})
 def unbind_my_device(request, pk: int, data: s.Empty = s.Empty()):
     device = services.unbind(get_object_or_404(Device, pk=pk, entitlement__account=request.user))
-    log.info("unbind", entitlement_id=device.entitlement_id, device_id=device.pk)
+    log.info("unbind", extra={"entitlement_id": device.entitlement_id, "device_id": device.pk})
     return Status(200, {"device": device})
 
 
@@ -183,7 +193,7 @@ def unbind_my_device(request, pk: int, data: s.Empty = s.Empty()):
 def set_my_device_display_name(request, pk: int, data: s.DeviceName):
     device = get_object_or_404(Device, pk=pk, entitlement__account=request.user)
     services.rename_device(device, data.display_name)
-    log.info("rename", entitlement_id=device.entitlement_id, device_id=device.pk)
+    log.info("rename", extra={"entitlement_id": device.entitlement_id, "device_id": device.pk})
     return Status(200, {"device": device})
 
 
@@ -194,7 +204,12 @@ def activate_device(request, data: s.Activate):
         entitlement, data.device_fingerprint, data.display_name, source_key_id=key.pk
     )
     log.info(
-        "activate", product_id=entitlement.product_id, entitlement_id=entitlement.pk, device_id=device.pk
+        "activate",
+        extra={
+            "product_id": entitlement.product_id,
+            "entitlement_id": entitlement.pk,
+            "device_id": device.pk,
+        },
     )
     return Status(201 if created else 200, {"device": device})
 
@@ -202,7 +217,7 @@ def activate_device(request, data: s.Activate):
 @public.post("/validate", response={200: s.ValidatedDevice, **s.ERROR_RESPONSES})
 def validate_device(request, data: s.Validate):
     device = services.validate(data.license_key, data.device_fingerprint)
-    log.info("validate", entitlement_id=device.entitlement_id, device_id=device.pk)
+    log.info("validate", extra={"entitlement_id": device.entitlement_id, "device_id": device.pk})
     return Status(200, {"valid": True, "device": device})
 
 

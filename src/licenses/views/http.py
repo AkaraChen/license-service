@@ -1,6 +1,7 @@
 """License-specific HTTP policy around Ninja's request lifecycle."""
 
-import structlog
+import logging
+
 from django.core.exceptions import RequestDataTooBig
 from django.db import DataError, IntegrityError, OperationalError
 from django.http import Http404, JsonResponse
@@ -12,7 +13,7 @@ from redis.exceptions import RedisError
 
 from ..services import Failure
 
-log = structlog.get_logger(__name__)
+log = logging.getLogger(__name__)
 
 HTTP_STATUS = {
     "validation_error": 400,
@@ -70,7 +71,7 @@ def api_error(request, exc):
         error, message = "rate_limited", "Registration limit reached. Please try again later."
     else:
         error, message = "validation_error", "The request body is invalid or too large."
-    log.warning("api_error", outcome=error)
+    log.warning("api_error", extra={"outcome": error})
     return JsonResponse({"error": error, "message": message}, status=HTTP_STATUS[error])
 
 

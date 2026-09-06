@@ -5,7 +5,8 @@ accounts.py/services.py mutations as the JSON operations (5.1.1). The Admin cons
 Django Admin at /admin/ and is never linked or exposed here.
 """
 
-import structlog
+import logging
+
 from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import LoginView
@@ -18,7 +19,7 @@ from ..models import Device, Entitlement
 from ..services import Failure
 from .forms import DeviceNameForm, RedeemForm, RegistrationForm
 
-log = structlog.get_logger(__name__)
+log = logging.getLogger(__name__)
 
 
 def _entitlement_response(request, entitlement, *, error=None, rename_forms=None, status=200):
@@ -43,10 +44,10 @@ def register_page(request):
         try:
             user = accounts.register_account(**form.cleaned_data, request=request)
         except Failure as exc:
-            log.warning("register", outcome=exc.error)
+            log.warning("register", extra={"outcome": exc.error})
             form.add_error(None, exc.message)
         else:
-            log.info("register", account_id=user.pk)
+            log.info("register", extra={"account_id": user.pk})
             login(request, user, backend="django.contrib.auth.backends.ModelBackend")
             return redirect("ui_home")
     return TemplateResponse(
@@ -63,7 +64,7 @@ class CustomerLoginView(LoginView):
     redirect_authenticated_user = True
 
     def form_invalid(self, form):
-        log.warning("login", outcome="unauthenticated")
+        log.warning("login", extra={"outcome": "unauthenticated"})
         return super().form_invalid(form)
 
 
@@ -79,10 +80,12 @@ def redeem_page(request):
         try:
             entitlement, _ = services.redeem(request.user, form.cleaned_data["license_key"])
         except Failure as exc:
-            log.warning("redeem", outcome=exc.error)
+            log.warning("redeem", extra={"outcome": exc.error})
             form.add_error(None, exc.message)
         else:
-            log.info("redeem", entitlement_id=entitlement.pk, product_id=entitlement.product_id)
+            log.info(
+                "redeem", extra={"entitlement_id": entitlement.pk, "product_id": entitlement.product_id}
+            )
             return redirect("ui_home")
     return TemplateResponse(
         request, "licenses/redeem.html", {"form": form}, status=400 if form.errors else 200
@@ -103,9 +106,11 @@ def unbind_page(request, device_id):
     try:
         services.unbind(device)
     except Failure as exc:
-        log.warning("unbind", outcome=exc.error)
+        log.warning("unbind", extra={"outcome": exc.error})
         return _entitlement_response(request, device.entitlement, error=exc.message, status=400)
-    log.info("unbind", entitlement_id=device.entitlement_id, product_id=device.entitlement.product_id)
+    log.info(
+        "unbind", extra={"entitlement_id": device.entitlement_id, "product_id": device.entitlement.product_id}
+    )
     return redirect("ui_entitlement", entitlement_id=device.entitlement_id)
 
 
@@ -115,17 +120,19 @@ def rename_page(request, device_id):
     device = get_object_or_404(Device, pk=device_id, entitlement__account=request.user)
     form = DeviceNameForm(request.POST)
     if not form.is_valid():
-        log.warning("rename", outcome="validation_error")
+        log.warning("rename", extra={"outcome": "validation_error"})
         return _entitlement_response(
             request, device.entitlement, rename_forms={device.pk: form}, status=400
         )
     try:
         services.rename_device(device, **form.cleaned_data)
     except Failure as exc:
-        log.warning("rename", outcome=exc.error)
+        log.warning("rename", extra={"outcome": exc.error})
         form.add_error(None, exc.message)
         return _entitlement_response(
             request, device.entitlement, rename_forms={device.pk: form}, status=400
         )
-    log.info("rename", entitlement_id=device.entitlement_id, product_id=device.entitlement.product_id)
+    log.info(
+        "rename", extra={"entitlement_id": device.entitlement_id, "product_id": device.entitlement.product_id}
+    )
     return redirect("ui_entitlement", entitlement_id=device.entitlement_id)

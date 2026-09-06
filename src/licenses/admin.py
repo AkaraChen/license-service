@@ -3,7 +3,8 @@
 the immediate response and never stored; password hashes are never displayed.
 """
 
-import structlog
+import logging
+
 from admin_extra_buttons.api import ExtraButtonsMixin, button
 from django import forms
 from django.contrib import admin
@@ -23,7 +24,7 @@ from unfold.widgets import (
 from . import accounts, services
 from .models import Device, Entitlement, LicenseKey, Product
 
-log = structlog.get_logger(__name__)
+log = logging.getLogger(__name__)
 
 BATCH_ISSUE_MAX = 50
 
@@ -50,18 +51,20 @@ class BatchIssueForm(forms.Form):
 
 class LoggedAdmin(ModelAdmin):
     def log_addition(self, request, obj, message):
-        log.info("admin_add", model=obj._meta.label_lower, object_id=obj.pk)
+        log.info("admin_add", extra={"model": obj._meta.label_lower, "object_id": obj.pk})
         return super().log_addition(request, obj, message)
 
     def log_change(self, request, obj, message):
-        log.info("admin_change", model=obj._meta.label_lower, object_id=obj.pk)
+        log.info("admin_change", extra={"model": obj._meta.label_lower, "object_id": obj.pk})
         return super().log_change(request, obj, message)
 
     def log_deletions(self, request, queryset):
         log.info(
             "admin_delete",
-            model=self.model._meta.label_lower,
-            object_ids=list(queryset.values_list("pk", flat=True)),
+            extra={
+                "model": self.model._meta.label_lower,
+                "object_ids": list(queryset.values_list("pk", flat=True)),
+            },
         )
         return super().log_deletions(request, queryset)
 
@@ -105,7 +108,7 @@ class LicenseKeyAdmin(ExtraButtonsMixin, LoggedAdmin):
         key, plaintext = services.issue_key(obj.product, obj.max_devices, obj.expires_at)
         obj.pk = key.pk
         request._issued_license_key = plaintext
-        log.info("issue", product_id=key.product_id, key_id=key.pk)
+        log.info("issue", extra={"product_id": key.product_id, "key_id": key.pk})
 
     def response_add(self, request, obj, post_url_continue=None):
         context = self.get_common_context(request, title=_("Issue batch"))
@@ -113,7 +116,7 @@ class LicenseKeyAdmin(ExtraButtonsMixin, LoggedAdmin):
 
     @admin.action(description="Revoke selected license keys")
     def revoke_keys(self, request, queryset):
-        log.info("revoke", key_ids=list(queryset.values_list("pk", flat=True)))
+        log.info("revoke", extra={"key_ids": list(queryset.values_list("pk", flat=True))})
         for key in queryset:
             services.revoke_key(key)
 
@@ -137,7 +140,7 @@ class LicenseKeyAdmin(ExtraButtonsMixin, LoggedAdmin):
                 for _n in range(count):
                     _key, plaintext = services.issue_key(product, max_devices, expires_at)
                     keys.append(plaintext)
-            log.info("issue_batch", product_id=product.pk, count=count)
+            log.info("issue_batch", extra={"product_id": product.pk, "count": count})
             return issued_response(request, context, keys)
 
         context["form"] = form
@@ -168,7 +171,7 @@ class DeviceAdmin(LoggedAdmin):
 
     @admin.action(description="Unbind selected devices")
     def unbind_devices(self, request, queryset):
-        log.info("unbind", device_ids=list(queryset.values_list("pk", flat=True)))
+        log.info("unbind", extra={"device_ids": list(queryset.values_list("pk", flat=True))})
         for device in queryset:
             services.unbind(device)
 

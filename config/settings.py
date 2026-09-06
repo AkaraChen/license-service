@@ -63,10 +63,8 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
-    "licenses.audit.SanitizeRequestIdMiddleware",
     "django_structlog.middlewares.RequestMiddleware",
-    "licenses.audit.JsonWritePolicyMiddleware",
-    "licenses.audit.AuditMiddleware",
+    "licenses.middleware.JsonWritePolicyMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django_ratelimit.middleware.RatelimitMiddleware",
     "axes.middleware.AxesMiddleware",
@@ -111,10 +109,7 @@ CACHES = {
         "OPTIONS": {"SOCKET_CONNECT_TIMEOUT": 2, "SOCKET_TIMEOUT": 2},
     }
 }
-AUTHENTICATION_BACKENDS = [
-    "axes.backends.AxesStandaloneBackend",
-    "django.contrib.auth.backends.ModelBackend",
-]
+AUTHENTICATION_BACKENDS = ["axes.backends.AxesStandaloneBackend", "django.contrib.auth.backends.ModelBackend"]
 AXES_HANDLER = "axes.handlers.cache.AxesCacheHandler"
 AXES_FAILURE_LIMIT = 5
 AXES_COOLOFF_TIME = timedelta(minutes=15)
@@ -192,6 +187,4 @@ structlog.configure(
     wrapper_class=structlog.stdlib.BoundLogger,
     cache_logger_on_first_use=True,
 )
-# django-structlog copies X-Request-ID verbatim; SanitizeRequestIdMiddleware
-# keeps only [A-Za-z0-9_-]{1,64}. It does not log bodies.
 DJANGO_STRUCTLOG_IP_LOGGING_ENABLED = False

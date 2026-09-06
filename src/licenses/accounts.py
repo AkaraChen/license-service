@@ -1,5 +1,6 @@
 """Account registration and rate limiting."""
 
+import structlog
 from django.contrib.auth.models import User
 from django.contrib.sessions.models import Session
 from django.core.cache import cache
@@ -10,8 +11,9 @@ from django.shortcuts import render
 from django.utils.translation import gettext
 from django_ratelimit.decorators import ratelimit
 
-from . import audit
 from .services import Failure
+
+log = structlog.get_logger(__name__)
 
 MAX_ACCOUNTS = 10_000
 
@@ -55,7 +57,7 @@ def set_account_active(account, active):
 
 
 def lockout_response(request, response, credentials=None):
-    # Keep the adapters' generic invalid-credentials response, including Admin.
+    log.warning("lockout")
     return response
 
 
@@ -66,7 +68,7 @@ def admit_registration(request):
 
 
 def ratelimited(request, exception):
-    audit.resources(request, outcome="rate_limited")
+    log.warning("register", outcome="rate_limited")
     return render(
         request,
         "licenses/error.html",

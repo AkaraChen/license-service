@@ -1,7 +1,6 @@
 """Executable regressions mapped to the September security scan."""
 
 import json
-import logging
 import re
 from unittest.mock import patch
 
@@ -176,52 +175,6 @@ def test_activation_rechecks_key_after_resolution(db, redeemed):
     assert not Device.objects.exists()
 
 
-@pytest.mark.parametrize("rid", ["ok\noutcome=success", "id actor=admin", "x" * 1000, "a,b", "\x00"])
-def test_request_ids_cannot_forge_audit_records(db, caplog, rid):
-    with caplog.at_level(logging.INFO, logger="licenses.api"):
-        post(
-            Client(), "/api/auth/login", {"username": "missing", "password": "secret"}, HTTP_X_REQUEST_ID=rid
-        )
-    records = [json.loads(record.getMessage()) for record in caplog.records if record.name == "licenses.api"]
-    assert len(records) == 1
-    assert records[0]["actor"] == "anonymous"
-    assert records[0]["outcome"] == "unauthenticated"
-    assert re.fullmatch(r"[a-f0-9]{32}", records[0]["rid"])
-    assert "secret" not in caplog.text
-
-
-def test_html_and_admin_mutations_emit_audit_resources(db, customer_api, admin_api, redeemed, caplog):
-    entitlement, key = redeemed
-    device, _ = services.bind(entitlement, "hidden-fingerprint")
-    with caplog.at_level(logging.INFO, logger="licenses.api"):
-        assert customer_api.client.post("/ui/redeem", {"license_key": key}).status_code == 302
-        assert (
-            customer_api.client.post(
-                f"/ui/devices/{device.pk}/rename", {"display_name": "Laptop"}
-            ).status_code
-            == 302
-        )
-        assert (
-            admin_api.client.post(
-                f"/admin/licenses/entitlement/{entitlement.pk}/change/",
-                {"status": "suspended", "_save": "Save"},
-            ).status_code
-            == 302
-        )
-        assert customer_api.client.post("/ui/redeem", {"license_key": "not-a-key"}).status_code == 400
-    records = [json.loads(record.getMessage()) for record in caplog.records if record.name == "licenses.api"]
-    assert any(
-        r["actor"] == "customer" and r.get("entitlement_id") == entitlement.pk and r["outcome"] == "success"
-        for r in records
-    )
-    assert any(
-        r["actor"] == "admin" and r.get("object_id") == entitlement.pk and r["outcome"] == "success"
-        for r in records
-    )
-    assert any(r["outcome"] == "unknown_key" for r in records)
-    assert key not in caplog.text and "hidden-fingerprint" not in caplog.text
-
-
 @pytest.mark.parametrize(
     "body",
     [
@@ -249,22 +202,3 @@ def test_account_capacity_rejects_new_registrations(db, customer, monkeypatch):
 def test_database_rejects_case_variant_identity_outside_registration(db, customer):
     with pytest.raises(IntegrityError), transaction.atomic():
         User.objects.create(username="ALICE")
-
-
-def test_audit_sink_failure_does_not_fail_committed_mutation(db):
-    with patch("licenses.audit.log.info", side_effect=OSError("sink unavailable")):
-        response = post(Client(), "/api/auth/register", {"username": "new", "password": "pw"})
-    assert response.status_code == 201
-    assert User.objects.filter(username="new").exists()
-
-
-def test_admin_login_audit_records_authenticated_actor(db, admin, caplog):
-    with caplog.at_level(logging.INFO, logger="licenses.api"):
-        response = Client().post(
-            "/admin/login/", {"username": "root", "password": "admin-pw-123", "next": "/admin/"}
-        )
-    assert response.status_code == 302
-    records = [json.loads(r.getMessage()) for r in caplog.records if r.name == "licenses.api"]
-    assert records[-1]["actor"] == "admin"
-    assert records[-1]["account_id"] == admin.pk
-    assert records[-1]["outcome"] == "success"

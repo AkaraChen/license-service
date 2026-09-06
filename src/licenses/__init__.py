@@ -8,5 +8,5 @@ MTV lives in three packages:
 - `admin.py` — Django Admin console (framework hook, stays at the app root)
 
 Everything else at this root is not presentation or persistence:
-accounts (auth), services (policy), audit, app config.
+accounts (auth), services (policy), app config.
 """

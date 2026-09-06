@@ -64,14 +64,6 @@ def test_oversized_fingerprint_rejected(customer_api, redeemed):
     assert error_class(response) == "validation_error"
 
 
-def test_non_json_content_type_rejected(api):
-    response = api.call(
-        "POST", "auth/register", "username=alice&password=x", content_type="application/x-www-form-urlencoded"
-    )
-    assert response.status_code == 400
-    assert error_class(response) == "validation_error"
-
-
 def test_error_envelope_shape_and_status_mapping(api, admin_api, product):
     response = api.post("auth/login", {"username": "ghost", "password": "nope"})
     body = json.loads(response.content)

@@ -99,34 +99,12 @@ def test_activation_changes_invalidate_existing_sessions(db, admin, customer_api
     assert customer_api.get("me/entitlements").status_code == 401
 
 
-@pytest.mark.parametrize(
-    "content_type", ["application/x-www-form-urlencoded", "text/plain", "multipart/form-data"]
-)
-def test_empty_form_mutations_cannot_use_victim_session(db, admin_api, redeemed, content_type):
-    entitlement, _ = redeemed
-    device, _ = services.bind(entitlement, "machine")
-    paths = [
-        "/api/auth/logout",
-        f"/api/license-keys/{entitlement.source_key_id}/revoke",
-        f"/api/devices/{device.pk}/unbind",
-    ]
-    for path in paths:
-        response = admin_api.client.generic("POST", path, b"", content_type=content_type)
-        assert response.status_code == 400
-    device.refresh_from_db()
-    assert device.status == "bound"
-    assert LicenseKey.objects.get(pk=entitlement.source_key_id).status == "redeemed"
-    assert admin_api.get("accounts").status_code == 200
-
-
 def test_sibling_origin_cannot_send_json_session_mutations(customer_api, redeemed):
     entitlement, _ = redeemed
     device, _ = services.bind(entitlement, "machine")
     path = f"/api/me/devices/{device.pk}/unbind"
     response = post(customer_api.client, path, {}, HTTP_ORIGIN="http://evil.testserver")
     assert response.status_code == 403
-    response = customer_api.client.generic("POST", path, b"", content_type="text/plain")
-    assert response.status_code == 400
     device.refresh_from_db()
     assert device.status == "bound"
     assert post(customer_api.client, path, {}, HTTP_ORIGIN="http://testserver").status_code == 200

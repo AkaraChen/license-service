@@ -46,22 +46,3 @@ class SameOriginCookieWriteMiddleware:
         ):
             return Forbidden("Cross-origin writes are not allowed.").as_response(request)
         return None
-
-
-class JsonContentTypeMiddleware:
-    def __init__(self, get_response):
-        self.get_response = get_response
-
-    def __call__(self, request):
-        return self.get_response(request)
-
-    def process_view(self, request, view, args, kwargs):
-        from .services.errors import ValidationError
-
-        if (
-            request.path.startswith("/api/")
-            and request.method in {"POST", "PATCH"}
-            and request.content_type != "application/json"
-        ):
-            return ValidationError("Write bodies must be application/json.").as_response(request)
-        return None

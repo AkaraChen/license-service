@@ -178,8 +178,9 @@ Django Ninja routers in `src/licenses/views/api.py` declare the 25 machine opera
 Pydantic request schemas live in `src/licenses/views/schemas.py`. SPEC error
 classes in `src/licenses/services/errors.py` subclass Ninja `HttpError`; the
 `{"error","message"}` envelope is `Failure.envelope()` / `Failure.as_response()`.
-Views log mutations with the stdlib logger; `JsonWritePolicyMiddleware` keeps the JSON
-same-origin + Content-Type write policy and the `/api/` 405 envelope. Ninja
+Views log mutations with the stdlib logger; `SameOriginCookieWriteMiddleware`
+rejects a mismatched Origin on cookie writes and `JsonContentTypeMiddleware`
+requires JSON bodies. Ninja already returns 405 for the wrong method. Ninja
 generates `/openapi.json` and `/docs`. There is no operation registry, custom JSON
 type parser or OpenAPI builder.
 

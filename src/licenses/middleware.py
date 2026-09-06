@@ -26,29 +26,42 @@ class RequestIdFilter(logging.Filter):
         return True
 
 
-class JsonWritePolicyMiddleware:
+class SameOriginCookieWriteMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response
 
     def __call__(self, request):
-        response = self.get_response(request)
-        if request.path.startswith("/api/") and response.status_code == 405:
-            from .services.errors import ValidationError
-
-            return ValidationError("Method not allowed.").as_response(
-                status=405, headers={"Allow": response.get("Allow", "")}
-            )
-        return response
+        return self.get_response(request)
 
     def process_view(self, request, view, args, kwargs):
-        if not request.path.startswith("/api/") or request.method not in {"POST", "PATCH"}:
-            return None
-        from .services.errors import Forbidden, ValidationError
+        from .services.errors import Forbidden
 
         origin = request.headers.get("Origin")
-        if request.path not in {"/api/activate", "/api/validate"} and origin is not None:
-            if origin != f"{request.scheme}://{request.get_host()}":
-                return Forbidden("Cross-origin writes are not allowed.").as_response(request)
-        if request.content_type != "application/json":
+        if (
+            request.path.startswith("/api/")
+            and request.method in {"POST", "PATCH"}
+            and request.path not in {"/api/activate", "/api/validate"}
+            and origin is not None
+            and origin != f"{request.scheme}://{request.get_host()}"
+        ):
+            return Forbidden("Cross-origin writes are not allowed.").as_response(request)
+        return None
+
+
+class JsonContentTypeMiddleware:
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        return self.get_response(request)
+
+    def process_view(self, request, view, args, kwargs):
+        from .services.errors import ValidationError
+
+        if (
+            request.path.startswith("/api/")
+            and request.method in {"POST", "PATCH"}
+            and request.content_type != "application/json"
+        ):
             return ValidationError("Write bodies must be application/json.").as_response(request)
         return None

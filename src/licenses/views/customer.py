@@ -19,25 +19,15 @@ from .forms import DeviceNameForm, RedeemForm, RegistrationForm
 
 
 def _entitlement_response(request, entitlement, *, error=None, rename_forms=None, status=200):
-    bound = entitlement.devices.filter(status="bound").count()
-    rename_forms = rename_forms or {}
+    forms = rename_forms or {}
+    rows = [
+        (d, forms.get(d.pk) or DeviceNameForm(initial={"display_name": d.display_name}))
+        for d in entitlement.devices.order_by("pk")
+    ]
     return render(
         request,
         "licenses/entitlement.html",
-        {
-            "entitlement": entitlement,
-            "devices": [
-                (
-                    device,
-                    rename_forms.get(device.pk)
-                    or DeviceNameForm(initial={"display_name": device.display_name}),
-                )
-                for device in entitlement.devices.order_by("pk")
-            ],
-            "seats_used": bound,
-            "seats_available": max(0, entitlement.max_devices - bound),
-            "error": error,
-        },
+        {"entitlement": entitlement, "devices": rows, "error": error},
         status=status,
     )
 

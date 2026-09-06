@@ -12,7 +12,7 @@
     <h1 class="page-title">{% blocktrans with name=entitlement.product.name %}Devices for {{ name }}{% endblocktrans %}</h1>
     <p class="page-lead">
       <span class="pill {% if entitlement.status == 'active' %}pill-success{% else %}pill-danger{% endif %}">{{ entitlement.get_status_display }}</span>
-      <span class="ml-2">{% blocktrans with avail=seats_available total=entitlement.max_devices %}{{ avail }} of {{ total }} seats available{% endblocktrans %}</span>
+      <span class="ml-2">{% blocktrans with avail=entitlement.seats_available total=entitlement.max_devices %}{{ avail }} of {{ total }} seats available{% endblocktrans %}</span>
       <span class="mx-1.5 text-ink-muted">·</span>
       <span>{% trans "Expires" %} {% if entitlement.expires_at %}{{ entitlement.expires_at }}{% else %}{% trans "never" %}{% endif %}</span>
     </p>

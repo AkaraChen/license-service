@@ -1,24 +1,19 @@
-"""Policy layer (SPEC 7, 16). The License Store (ORM) is the single mutation
-authority; every mutation runs atomically in the deciding request."""
+"""License policy and shared validation/transaction helpers (SPEC 7, 16).
+Account registration and authentication live in accounts.py.
+"""
 
 import hashlib
 import secrets
 import time
 
-from django.contrib.auth.models import User
-from django.core.cache import cache
-from django.db import IntegrityError, OperationalError, transaction
-from django.db.models import Value
-from django.db.models.functions import Lower
+from django.db import OperationalError, transaction
 from django.utils import timezone
 from django.utils.translation import gettext
 
 from .models import Entitlement, LicenseKey
 
-MAX_ACCOUNTS = 10_000
 DEVICE_HISTORY_LIMIT = 100
 FINGERPRINT_MAX_LENGTH = 128
-USERNAME_MAX_LENGTH = 150
 _KEY_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789"  # 32 chars from 29 symbols: ~155 bits (4.1.3)
 
 
@@ -33,36 +28,6 @@ class Failure(Exception):
 
 def hash_key(plaintext):
     return hashlib.sha256(plaintext.encode("utf-8")).hexdigest()
-
-
-def register_account(username, password, request=None):
-    """Open self-registration. Invariant 4: always is_admin=False."""
-    username = (username or "").strip()
-    if not username or len(username) > USERNAME_MAX_LENGTH:
-        raise Failure("validation_error", gettext("username must be 1-150 characters."))
-    if not password:
-        raise Failure("validation_error", gettext("password must not be empty."))
-    if len(password) > 1024:
-        raise Failure("validation_error", "password exceeds 1024 characters.")
-    validate_text(username)
-    validate_text(password)
-    from .registration import admit_registration
-
-    if request is not None:
-        admit_registration(request)
-
-    def work():
-        if User.objects.count() >= MAX_ACCOUNTS:
-            raise Failure("rate_limited", "Account capacity reached. Contact the operator.")
-        if User.objects.alias(canonical=Lower("username")).filter(canonical=Lower(Value(username))).exists():
-            raise Failure("conflict", gettext("This username is already taken."))
-        return User.objects.create_user(username=username, password=password)
-
-    try:
-        with cache.lock("registration", timeout=30, blocking_timeout=2):
-            return _atomic(work)
-    except IntegrityError:
-        raise Failure("conflict", gettext("This username is already taken.")) from None
 
 
 def issue_key(product, max_devices, expires_at=None):

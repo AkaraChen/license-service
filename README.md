@@ -24,7 +24,7 @@ Then open:
 | `/admin/` | Admin console (Django Admin, `is_staff` sessions only) |
 | `/ui/register`, `/ui/login` | Customer self-service pages |
 | `/` | Customer entitlement list (login required) |
-| `/openapi.json` | OpenAPI 3.1 document, generated from the operation registry |
+| `/openapi.json` | OpenAPI 3.1 document, generated from Django URL patterns and view metadata |
 | `/api/...` | JSON machine API (25 operations, SPEC Section 11) |
 
 ## Configuration (SPEC Section 6)
@@ -167,30 +167,33 @@ blank lines excluded).
 
 The domain core — entities and invariants (`models.py`), the Section 7 state
 machines (`services.py`), and the HTTP contract with validation, authorization, and
-audit logging (`api.py`) — is **584 code lines**. The expanded security controls
-exceed the original 500-line core target. Login/registration limits, audit emission
-and session invalidation live in dedicated modules; presentation uses the shared
-registry/services.
+audit logging (`api.py`) — uses 21 explicit Django function views for 25 operations.
+Validation, authorization, queries, response fields, and error handling are inline
+so each view can be read without following helper wrappers. This deliberately
+exceeds the original 500-line core target. Business rules, login/registration
+limits, audit emission, and session invalidation retain their existing modules.
+OpenAPI reads the Django URLconf and documentation-only `.openapi` attributes
+beside the views.
 
 | File | Code lines (scc) | Layer |
 | --- | --- | --- |
 | `licenses/models.py` | 74 | Persistence (entities, uniqueness invariants, login counters) |
 | `licenses/services.py` | 188 | Policy (authentication/redeem/bind/unbind/validate, seats) |
-| `licenses/api.py` | 322 | Coordination (25 ops, validation, authz, logging) |
-| **domain core subtotal** | **584** | |
+| `licenses/api.py` | 1544 | Coordination (25 ops, validation, authz, logging) |
+| **domain core subtotal** | **1806** | |
 | `licenses/auth.py` | 135 | Authentication abuse controls |
 | `licenses/registration.py` | 39 | Registration admission and hash serialization |
 | `licenses/audit.py` | 59 | Shared audit emission |
 | `licenses/signals.py` | 14 | Session invalidation |
-| **core and security modules subtotal** | **831** | |
-| `licenses/openapi.py` | 64 | Presentation (OpenAPI from the registry) |
+| **core and security modules subtotal** | **2053** | |
+| `licenses/openapi.py` | 75 | Presentation (OpenAPI from URLconf and view metadata) |
 | `licenses/views_ui.py` | 118 | Presentation (Customer HTML pages) |
 | `licenses/admin.py` | 155 | Presentation (Admin console config) |
 | `licenses/apps.py` | 25 | Startup preflight checks |
-| `config/`, `manage.py` | 194 | Standard Django project scaffolding |
+| `config/`, `manage.py` | 214 | Standard Django project scaffolding |
 | `licenses/templates/` | — | HTML (Django templates + Tailwind) |
 | `src/styles.css` | — | Tailwind source (compiled to `assets/css/tailwind.css`) |
-| `licenses/tests/` | 1495 | pytest suite (not counted as core) |
+| `licenses/tests/` | 1680 | pytest suite (not counted as core) |
 
 Reproduce: `scc --no-cocomo --no-size licenses/models.py licenses/services.py licenses/api.py`
 
@@ -201,8 +204,10 @@ uv run pytest                 # SQLite suite; explicit test profile
 uv run ruff format --check . && uv run ruff check .   # style and lint gates
 ```
 
-80 tests, organized by SPEC Section 17:
+Tests are organized by SPEC Section 17:
 
+- `test_api_views.py` — explicit routes, HTTP methods, documented authentication and
+  write fields, timestamp precision, database errors, and audit outcomes.
 - `test_parsing.py` — 17.2: unknown/missing/typed fields, envelope shape, status
   mapping, session requirements, empty-list behavior.
 - `test_authz.py` — 17.4: Admin vs Customer authorization, cross-account secrecy
@@ -215,7 +220,7 @@ uv run ruff format --check . && uv run ruff check .   # style and lint gates
 - `test_immutability.py` — 17.6: no operation mutates `max_devices`/`expires_at`;
   8-thread concurrent bind race never exceeds `max_devices`.
 - `test_openapi_logs.py` — 17.7: served OpenAPI lists every operationId and matches
-  the registry; audit logs carry `actor`/`outcome`/`rid` and never secrets.
+  the running URLconf; audit logs carry `actor`/`outcome`/`rid` and never secrets.
 - `test_html.py` — 17.8: Admin console gating, Customer page flow
   (register → redeem → bind → unbind), no Admin console exposure, plaintext shown once.
 - `test_config.py` — 17.8: `config_invalid` and unreachable store prevent startup.

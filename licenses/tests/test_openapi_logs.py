@@ -3,7 +3,7 @@
 import json
 import logging
 
-from licenses.api import OPERATIONS
+from django.urls import URLPattern, get_resolver, resolve
 
 from .conftest import ALICE_PW
 
@@ -42,7 +42,16 @@ def test_openapi_served_and_lists_every_operation(api):
     document = json.loads(response.content)
     served = {spec["operationId"] for path in document["paths"].values() for spec in path.values()}
     assert served == EXPECTED_OPERATIONS
-    assert served == {name for name, *_ in OPERATIONS}  # generated, not handwritten
+    routes = [
+        route
+        for route in get_resolver().url_patterns
+        if isinstance(route, URLPattern) and str(route.pattern).startswith("api/")
+    ]
+    assert len(routes) == len(document["paths"]) == 21
+    for route in routes:
+        path = "/" + str(route.pattern).replace("<int:pk>", "{pk}")
+        assert set(document["paths"][path]) == {method.lower() for method in route.callback.openapi}
+        assert resolve(path.replace("{pk}", "1")).func is route.callback
 
 
 def test_openapi_describes_error_envelope_and_write_fields(api):

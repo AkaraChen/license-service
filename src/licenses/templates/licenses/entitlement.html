@@ -18,6 +18,7 @@
     </p>
   </div>
 </div>
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
 {% if devices %}
 <div class="card-grid">
   {% for d, rename_form in devices %}
@@ -40,7 +41,8 @@
           <i class="ph ph-pencil-simple dialog-icon" aria-hidden="true"></i>
           <h2 class="dialog-title">{% trans "Rename" %}</h2>
         </div>
-        <label class="field"><span>{% trans "Name" %}</span>{{ rename_form.display_name }}</label>
+        {{ rename_form.non_field_errors }}
+        <label class="field"><span>{% trans "Name" %}</span>{{ rename_form.display_name }}{{ rename_form.display_name.errors }}</label>
         <div class="dialog-actions">
           <button type="button" class="btn" @click="$refs.rename.close()">{% trans "Cancel" %}</button>
           <button type="submit" class="btn btn-primary">{% trans "Rename" %}</button>

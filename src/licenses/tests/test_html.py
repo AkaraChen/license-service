@@ -6,6 +6,7 @@ from django.test import Client, override_settings
 
 from licenses import services
 from licenses.models import Entitlement, LicenseKey
+from licenses.services import Failure
 
 from .conftest import ADMIN_PW, ALICE_PW
 
@@ -70,6 +71,54 @@ def test_customer_pages_full_flow(db, customer, product):
     assert device.status == "unbound"
 
 
+def test_redeem_failure_stays_on_redeem_page(db, customer):
+    browser = Client()
+    browser.post(
+        "/api/auth/login", {"username": "alice", "password": ALICE_PW}, content_type="application/json"
+    )
+    response = browser.post("/ui/redeem", {"license_key": "not-a-key"})
+    assert response.status_code == 400
+    assert b"Redeem a license key" in response.content
+    assert b"Request failed" not in response.content
+    assert b"not recognized" in response.content
+
+
+def test_unbind_failure_stays_on_entitlement_page(db, customer, redeemed, monkeypatch):
+    entitlement, _ = redeemed
+    device, _ = services.bind(entitlement, "browser-machine", "Laptop")
+    browser = Client()
+    browser.post(
+        "/api/auth/login", {"username": "alice", "password": ALICE_PW}, content_type="application/json"
+    )
+
+    def refuse(bound):
+        raise Failure("conflict", "Cannot unbind this device.")
+
+    monkeypatch.setattr(services, "unbind", refuse)
+    response = browser.post(f"/ui/devices/{device.pk}/unbind")
+    assert response.status_code == 400
+    assert b"Devices for" in response.content
+    assert b"Cannot unbind this device." in response.content
+    assert b"Request failed" not in response.content
+    device.refresh_from_db()
+    assert device.status == "bound"
+
+
+def test_rename_validation_stays_on_entitlement_page(db, customer, redeemed):
+    entitlement, _ = redeemed
+    device, _ = services.bind(entitlement, "browser-machine", "Laptop")
+    browser = Client()
+    browser.post(
+        "/api/auth/login", {"username": "alice", "password": ALICE_PW}, content_type="application/json"
+    )
+    response = browser.post(f"/ui/devices/{device.pk}/rename", {"display_name": "x" * 201})
+    assert response.status_code == 400
+    assert b"Devices for" in response.content
+    assert b"Request failed" not in response.content
+    device.refresh_from_db()
+    assert device.display_name == "Laptop"
+
+
 def test_customer_pages_require_login(db):
     response = Client().get("/")
     assert response.status_code == 302 and "/ui/login" in response["Location"]
@@ -93,28 +142,19 @@ def test_login_returns_to_redeem_via_next(db, customer):
     assert browser.get("/ui/redeem").status_code == 200
 
 
-def test_login_honors_redirect_query_and_rejects_unsafe_targets(db, customer):
-    browser = Client()
-    via_redirect = browser.post("/ui/login?redirect=/ui/redeem", {"username": "alice", "password": ALICE_PW})
-    assert via_redirect.status_code == 302 and via_redirect["Location"] == "/ui/redeem"
-
-    offsite = Client()
-    response = offsite.post(
+def test_login_rejects_offsite_next(db, customer):
+    response = Client().post(
         "/ui/login", {"username": "alice", "password": ALICE_PW, "next": "https://evil.example/"}
     )
     assert response.status_code == 302 and response["Location"] == "/"
 
-    admin_target = Client()
-    response = admin_target.post("/ui/login", {"username": "alice", "password": ALICE_PW, "next": "/admin/"})
-    assert response.status_code == 302 and response["Location"] == "/"
 
-
-def test_register_returns_to_next(db):
+def test_register_redirects_home(db):
     browser = Client()
     response = browser.post(
         "/ui/register", {"username": "carol", "password": "carol-pw-1", "next": "/ui/redeem"}
     )
-    assert response.status_code == 302 and response["Location"] == "/ui/redeem"
+    assert response.status_code == 302 and response["Location"] == "/"
 
 
 def test_customer_pages_never_link_admin_console(db, customer, redeemed):

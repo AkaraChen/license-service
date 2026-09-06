@@ -10,7 +10,6 @@
     {% for field in form %}
     <label class="field"><span>{{ field.label }}</span>{{ field }}{{ field.errors }}</label>
     {% endfor %}
-    {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
     <button type="submit" class="btn btn-primary btn-lg mt-6 w-full">{% trans "Create account" %}</button>
   </form>
 </div>

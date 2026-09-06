@@ -4,12 +4,13 @@
 {% block content %}
 <div class="panel w-full max-w-[400px] p-8">
   <h1 class="page-title mb-6 text-2xl leading-8 tracking-[-0.03em]">{% trans "Log in" %}</h1>
-  {% if form.errors %}<div class="error mb-5">{{ form.non_field_errors }}{{ form.username.errors }}{{ form.password.errors }}</div>{% endif %}
   <form method="post">
     {% csrf_token %}
+    {{ form.non_field_errors }}
+    {% for field in form %}
+    <label class="field"><span>{{ field.label }}</span>{{ field }}{{ field.errors }}</label>
+    {% endfor %}
     {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
-    <label class="field"><span>{% trans "Username" %}</span><input name="username" required></label>
-    <label class="field"><span>{% trans "Password" %}</span><input name="password" type="password" required></label>
     <button type="submit" class="btn btn-primary btn-lg mt-6 w-full">{% trans "Log in" %}</button>
   </form>
 </div>

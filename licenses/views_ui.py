@@ -10,11 +10,13 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import LoginView
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
+from django.template.response import TemplateResponse
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.translation import gettext as _
 from django.views.decorators.http import require_GET, require_POST
 
 from . import accounts, audit, services
+from .forms import DeviceNameForm, RedeemForm, RegistrationForm
 from .models import Device, Entitlement
 from .services import Failure
 
@@ -54,18 +56,18 @@ def register_page(request):
     nxt = _safe_next(request)
     if request.user.is_authenticated:
         return redirect(nxt or "ui_home")
-    if request.method == "POST":
+    form = RegistrationForm(request.POST if request.method == "POST" else None)
+    if form.is_valid():
         try:
-            user = accounts.register_account(
-                request.POST.get("username"), request.POST.get("password"), request=request
-            )
+            user = accounts.register_account(**form.cleaned_data, request=request)
         except Failure as exc:
             audit.resources(request, outcome=exc.error)
-            return render(request, "licenses/register.html", {"error": exc.message, "next": nxt})
-        audit.resources(request, actor="admin" if user.is_staff else "customer", account_id=user.pk)
-        login(request, user, backend="licenses.accounts.CaseInsensitiveBackend")
-        return redirect(nxt or "ui_home")
-    return render(request, "licenses/register.html", {"next": nxt})
+            form.add_error(None, exc.message)
+        else:
+            audit.resources(request, actor="customer", account_id=user.pk)
+            login(request, user, backend="licenses.accounts.CaseInsensitiveBackend")
+            return redirect(nxt or "ui_home")
+    return TemplateResponse(request, "licenses/register.html", {"form": form, "next": nxt})
 
 
 class CustomerLoginView(LoginView):
@@ -89,11 +91,14 @@ def home(request):
 @login_required(login_url="ui_login")
 @_fail
 def redeem_page(request):
-    if request.method == "POST":
-        entitlement, _ = services.redeem(request.user, request.POST.get("license_key", ""))
+    form = RedeemForm(request.POST if request.method == "POST" else None)
+    if form.is_valid():
+        entitlement, _ = services.redeem(request.user, form.cleaned_data["license_key"])
         audit.resources(request, entitlement_id=entitlement.pk, product_id=entitlement.product_id)
         return redirect("ui_home")
-    return render(request, "licenses/redeem.html")
+    return TemplateResponse(
+        request, "licenses/redeem.html", {"form": form}, status=400 if form.errors else 200
+    )
 
 
 @login_required(login_url="ui_login")
@@ -107,7 +112,10 @@ def entitlement_page(request, entitlement_id):
         "licenses/entitlement.html",
         {
             "entitlement": entitlement,
-            "devices": entitlement.devices.order_by("pk"),
+            "devices": [
+                (device, DeviceNameForm(initial={"display_name": device.display_name}))
+                for device in entitlement.devices.order_by("pk")
+            ],
             "seats_used": bound,
             "seats_available": max(0, entitlement.max_devices - bound),
         },
@@ -129,6 +137,10 @@ def unbind_page(request, device_id):
 @_fail
 def rename_page(request, device_id):
     device = get_object_or_404(Device, pk=device_id, entitlement__account=request.user)
-    services.rename_device(device, request.POST.get("display_name"))
+    form = DeviceNameForm(request.POST)
+    if not form.is_valid():
+        audit.resources(request, outcome="validation_error")
+        return render(request, "licenses/error.html", {"error": form.errors}, status=400)
+    services.rename_device(device, **form.cleaned_data)
     audit.resources(request, entitlement_id=device.entitlement_id, product_id=device.entitlement.product_id)
     return redirect("ui_entitlement", entitlement_id=device.entitlement_id)

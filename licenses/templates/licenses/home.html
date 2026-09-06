@@ -1,23 +1,30 @@
 {% extends "licenses/base.html" %}
 {% load i18n %}
 {% block content %}
-<h1>{% trans "My entitlements" %}</h1>
+<div class="page-head">
+  <h1 class="page-title">{% trans "My entitlements" %}</h1>
+  <a href="{% url 'ui_redeem' %}" class="btn btn-primary">{% trans "Redeem a key" %}</a>
+</div>
 {% if entitlements %}
-<div class="overflow-x-auto">
-<table>
-  <tr><th>{% trans "Product" %}</th><th>{% trans "Status" %}</th><th>{% trans "Seats" %}</th><th>{% trans "Expires" %}</th><th></th></tr>
+<div class="panel p-0">
   {% for e in entitlements %}
-  <tr>
-    <td>{{ e.product.name }} (<code>{{ e.product.code }}</code>)</td>
-    <td>{{ e.get_status_display }}</td>
-    <td>{{ e.max_devices }}</td>
-    <td>{% if e.expires_at %}{{ e.expires_at }}{% else %}{% trans "never" %}{% endif %}</td>
-    <td><a href="{% url 'ui_entitlement' entitlement_id=e.pk %}">{% trans "Manage devices" %}</a></td>
-  </tr>
+  <div class="row">
+    <div class="min-w-0">
+      <div class="text-[15px] font-medium tracking-tight">{{ e.product.name }}</div>
+      <div class="meta mt-1.5 flex flex-wrap items-center gap-2">
+        <span class="pill">{{ e.get_status_display }}</span>
+        <span>{% trans "Seats" %} {{ e.max_devices }}</span>
+        <span class="text-ink-muted">·</span>
+        <span>{% trans "Expires" %} {% if e.expires_at %}{{ e.expires_at }}{% else %}{% trans "never" %}{% endif %}</span>
+      </div>
+    </div>
+    <a href="{% url 'ui_entitlement' entitlement_id=e.pk %}" class="btn shrink-0">{% trans "Manage devices" %}</a>
+  </div>
   {% endfor %}
-</table>
 </div>
 {% else %}
-<p>{% trans "No entitlements yet." %} <a href="{% url 'ui_redeem' %}">{% trans "Redeem a license key" %}</a>.</p>
+<div class="panel">
+  <p class="meta">{% trans "No entitlements yet." %}</p>
+</div>
 {% endif %}
 {% endblock %}

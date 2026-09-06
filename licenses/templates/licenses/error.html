@@ -1,7 +1,10 @@
 {% extends "licenses/base.html" %}
 {% load i18n %}
+{% block body_class %}is-auth{% endblock %}
 {% block content %}
-<h1>{% trans "Request failed" %}</h1>
-<p class="error">{{ error }}</p>
-<p><a href="{% url 'ui_home' %}">{% trans "Back to my entitlements" %}</a></p>
+<div class="panel w-full max-w-[400px] p-8">
+  <h1 class="page-title mb-5 text-2xl leading-8 tracking-[-0.03em]">{% trans "Request failed" %}</h1>
+  <p class="error">{{ error }}</p>
+  <p class="mt-6"><a href="{% url 'ui_home' %}" class="btn">{% trans "Back to my entitlements" %}</a></p>
+</div>
 {% endblock %}

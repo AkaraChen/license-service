@@ -14,6 +14,7 @@
   --color-ink-muted: #8f8f8f;
   --color-line: #eaeaea;
   --color-line-strong: #c9c9c9;
+  --color-hover: #f2f2f2;
   --color-accent: #006bff;
   --color-accent-hover: #005ff2;
   --color-danger: #ea001d;
@@ -21,6 +22,8 @@
 
   --radius-sm: 6px;
   --radius-md: 12px;
+
+  --ease-geist: cubic-bezier(0.175, 0.885, 0.32, 1.1);
 }
 
 @layer base {
@@ -30,86 +33,159 @@
   }
 
   body {
-    @apply bg-canvas font-sans text-sm text-ink antialiased;
+    @apply min-h-dvh bg-canvas font-sans text-sm leading-5 text-ink antialiased;
   }
 
-  a {
-    @apply text-accent no-underline;
+  ::selection {
+    background: #171717;
+    color: #ffffff;
   }
 
-  a:hover {
-    @apply text-accent-hover underline;
-  }
-
-  nav a {
-    @apply text-ink no-underline;
-  }
-
-  nav a:hover {
-    @apply text-ink-secondary no-underline;
-  }
-
-  h1 {
-    @apply mb-6 text-2xl font-semibold tracking-tight;
-  }
-
-  h2 {
-    @apply mt-8 mb-3 text-base font-semibold tracking-tight;
-  }
-
-  p {
-    @apply text-ink-secondary;
-  }
-
-  label {
-    @apply mb-3 block text-sm text-ink;
-  }
-
-  input {
-    @apply box-border mt-1.5 h-10 w-full rounded-sm border border-line bg-surface px-3 text-sm text-ink;
-  }
-
-  input:focus-visible,
-  button:focus-visible {
+  :focus-visible {
     outline: none;
     box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--color-accent);
-  }
-
-  button {
-    @apply mt-1 inline-flex h-8 cursor-pointer items-center rounded-sm border border-line bg-surface px-3 text-sm font-medium text-ink;
-  }
-
-  button:hover {
-    @apply bg-canvas;
-  }
-
-  table {
-    @apply w-full border-collapse text-sm;
-  }
-
-  th {
-    @apply border-b border-line px-3 py-2 text-left text-xs font-medium text-ink-secondary;
-  }
-
-  td {
-    @apply border-b border-line px-3 py-2 align-middle;
-  }
-
-  code {
-    @apply rounded-sm border border-line bg-surface px-1 py-0.5 font-mono text-[13px] text-ink;
   }
 }
 
 @layer components {
+  .shell-bar {
+    @apply mx-auto flex min-h-16 max-w-5xl flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2.5 sm:h-16 sm:flex-nowrap sm:gap-6 sm:px-6 sm:py-0;
+  }
+
+  .brand {
+    @apply shrink-0 text-[15px] font-semibold tracking-tight text-ink no-underline;
+  }
+
+  .nav-link {
+    @apply rounded-sm px-2.5 py-1.5 text-sm text-ink-secondary no-underline;
+    transition: background-color 150ms var(--ease-geist), color 150ms var(--ease-geist);
+  }
+
+  .nav-link:hover {
+    @apply bg-hover text-ink no-underline;
+  }
+
+  .nav-link.is-current {
+    @apply bg-hover font-medium text-ink;
+  }
+
+  .header-end {
+    @apply ml-auto flex shrink-0 items-center gap-2;
+  }
+
+  .header-end .btn {
+    @apply h-8;
+  }
+
+  .header-end .btn-primary {
+    @apply h-8;
+  }
+
+  .shell {
+    @apply mx-auto w-full max-w-5xl px-6 py-10;
+  }
+
+  body.is-auth .shell {
+    @apply flex min-h-[calc(100dvh-65px)] items-center justify-center py-16;
+  }
+
+  .panel {
+    @apply rounded-md border border-line bg-surface p-6;
+    box-shadow: 0 2px 2px rgb(0 0 0 / 0.04);
+  }
+
+  .page-head {
+    @apply mb-8 flex flex-wrap items-end justify-between gap-4;
+  }
+
+  .page-title {
+    @apply text-[32px] leading-10 font-semibold tracking-[-0.04em];
+  }
+
+  .page-lead {
+    @apply mt-2 text-sm text-ink-secondary;
+  }
+
+  .field {
+    @apply block;
+  }
+
+  .field + .field {
+    @apply mt-4;
+  }
+
+  .field > span {
+    @apply mb-1.5 block text-sm text-ink;
+  }
+
+  .field input,
+  .input {
+    @apply box-border h-10 w-full rounded-sm border border-line bg-surface px-3 text-sm text-ink;
+    transition: border-color 150ms var(--ease-geist);
+  }
+
+  .field input:hover,
+  .input:hover {
+    @apply border-line-strong;
+  }
+
+  .btn {
+    @apply inline-flex h-8 cursor-pointer items-center justify-center rounded-sm border border-line bg-surface px-3 text-sm font-medium text-ink no-underline;
+    transition: background-color 150ms var(--ease-geist), border-color 150ms var(--ease-geist),
+      color 150ms var(--ease-geist);
+  }
+
+  .btn:hover {
+    @apply bg-hover no-underline;
+  }
+
   .btn-primary {
-    @apply border-ink bg-ink text-surface;
+    @apply h-10 border-ink bg-ink text-surface;
   }
 
   .btn-primary:hover {
     @apply border-ink-secondary bg-ink-secondary text-surface;
   }
 
+  .btn-danger {
+    @apply text-danger;
+  }
+
+  .btn-danger:hover {
+    @apply bg-danger-soft;
+  }
+
+  .link {
+    @apply text-accent no-underline;
+  }
+
+  .link:hover {
+    @apply text-accent-hover underline;
+  }
+
+  .meta {
+    @apply text-sm text-ink-secondary;
+  }
+
   .error {
-    @apply my-4 rounded-sm border border-danger/20 bg-danger-soft px-3 py-2 text-sm text-danger;
+    @apply rounded-sm border border-danger/20 bg-danger-soft px-3 py-2 text-sm text-danger;
+  }
+
+  .row {
+    @apply flex flex-col gap-3 px-5 py-4 last:border-b-0 sm:flex-row sm:items-center sm:justify-between;
+    border-bottom: 1px solid var(--color-line);
+    transition: background-color 150ms var(--ease-geist);
+  }
+
+  .row:hover {
+    @apply bg-canvas;
+  }
+
+  .pill {
+    @apply inline-flex items-center rounded-sm border border-line px-1.5 py-0.5 text-[12px] leading-4 text-ink-secondary;
+  }
+
+  .mono {
+    @apply rounded-sm border border-line bg-canvas px-1.5 py-0.5 font-mono text-[13px] text-ink;
   }
 }

@@ -10,20 +10,29 @@
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
   {% tailwind_css %}
 </head>
-<body>
-  <div class="mx-auto max-w-3xl px-4 py-8">
-    <nav class="mb-8 flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-line pb-4 text-sm text-ink-secondary">
+<body class="{% block body_class %}{% endblock %}">
+  <header class="sticky top-0 z-10 border-b border-line bg-surface">
+    <div class="shell-bar">
+      <a href="{% url 'ui_home' %}" class="brand">{% trans "License Service" %}</a>
       {% if user.is_authenticated %}
-        {% blocktrans with username=user.username %}Signed in as <strong class="text-ink">{{ username }}</strong>{% endblocktrans %}
-        <a href="{% url 'ui_home' %}">{% trans "My entitlements" %}</a>
-        <a href="{% url 'ui_redeem' %}">{% trans "Redeem a key" %}</a>
-        <form method="post" action="{% url 'ui_logout' %}" class="inline">{% csrf_token %}<button>{% trans "Log out" %}</button></form>
+        <nav class="order-last flex w-full min-w-0 items-center gap-0.5 sm:order-none sm:w-auto sm:flex-1">
+          <a href="{% url 'ui_home' %}" class="nav-link{% if request.resolver_match.url_name == 'ui_home' or request.resolver_match.url_name == 'ui_entitlement' %} is-current{% endif %}">{% trans "My entitlements" %}</a>
+          <a href="{% url 'ui_redeem' %}" class="nav-link{% if request.resolver_match.url_name == 'ui_redeem' %} is-current{% endif %}">{% trans "Redeem a key" %}</a>
+        </nav>
+        <div class="header-end">
+          <span class="max-w-24 truncate text-sm text-ink-muted sm:max-w-none">{{ user.username }}</span>
+          <form method="post" action="{% url 'ui_logout' %}">{% csrf_token %}<button type="submit" class="btn">{% trans "Log out" %}</button></form>
+        </div>
       {% else %}
-        <a href="{% url 'ui_login' %}{% if next %}?next={{ next|urlencode }}{% endif %}">{% trans "Log in" %}</a>
-        <a href="{% url 'ui_register' %}{% if next %}?next={{ next|urlencode }}{% endif %}">{% trans "Register" %}</a>
+        <div class="header-end">
+          <a href="{% url 'ui_login' %}{% if next %}?next={{ next|urlencode }}{% endif %}" class="btn">{% trans "Log in" %}</a>
+          <a href="{% url 'ui_register' %}{% if next %}?next={{ next|urlencode }}{% endif %}" class="btn btn-primary">{% trans "Register" %}</a>
+        </div>
       {% endif %}
-    </nav>
+    </div>
+  </header>
+  <main class="shell">
     {% block content %}{% endblock %}
-  </div>
+  </main>
 </body>
 </html>

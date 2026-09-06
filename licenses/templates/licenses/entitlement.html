@@ -1,37 +1,49 @@
 {% extends "licenses/base.html" %}
 {% load i18n %}
 {% block content %}
-<h1>{% blocktrans with name=entitlement.product.name %}Devices for {{ name }}{% endblocktrans %}</h1>
-<p>{% trans "Status:" %} <strong class="text-ink">{{ entitlement.get_status_display }}</strong> &middot;
-   {% blocktrans with used=seats_used total=entitlement.max_devices %}Seats: {{ used }} used / {{ total }} total{% endblocktrans %} &middot;
-   {% trans "Expires:" %} {% if entitlement.expires_at %}{{ entitlement.expires_at }}{% else %}{% trans "never" %}{% endif %}</p>
-{% if devices %}
-<div class="overflow-x-auto">
-<table>
-  <tr><th>{% trans "Fingerprint" %}</th><th>{% trans "Name" %}</th><th>{% trans "Status" %}</th><th>{% trans "Bound at" %}</th><th></th></tr>
-  {% for d in devices %}
-  <tr>
-    <td><code>{{ d.device_fingerprint }}</code></td>
-    <td>{{ d.display_name|default:"" }}</td>
-    <td>{{ d.get_status_display }}</td>
-    <td>{{ d.bound_at }}</td>
-    <td>
-      {% if d.status == "bound" %}
-      <form method="post" action="{% url 'ui_unbind_device' device_id=d.pk %}" class="inline">
-        {% csrf_token %}<button>{% trans "Unbind" %}</button>
-      </form>
-      <form method="post" action="{% url 'ui_rename_device' device_id=d.pk %}" class="inline">
-        {% csrf_token %}<input name="display_name" value="{{ d.display_name|default:'' }}" class="mt-0 h-8 w-auto">
-        <button>{% trans "Rename" %}</button>
-      </form>
-      {% endif %}
-    </td>
-  </tr>
-  {% endfor %}
-</table>
+<div class="page-head">
+  <div>
+    <h1 class="page-title">{% blocktrans with name=entitlement.product.name %}Devices for {{ name }}{% endblocktrans %}</h1>
+    <p class="page-lead">
+      <span class="pill">{{ entitlement.get_status_display }}</span>
+      <span class="ml-2">{% blocktrans with used=seats_used total=entitlement.max_devices %}Seats: {{ used }} used / {{ total }} total{% endblocktrans %}</span>
+      <span class="mx-1.5 text-ink-muted">·</span>
+      <span>{% trans "Expires" %} {% if entitlement.expires_at %}{{ entitlement.expires_at }}{% else %}{% trans "never" %}{% endif %}</span>
+    </p>
+  </div>
 </div>
-{% endif %}
-{% if not devices %}
-<p>{% trans "No devices bound yet. Bind from the licensed application." %}</p>
+{% if devices %}
+<div class="panel p-0">
+  {% for d in devices %}
+  <div class="row">
+    <div class="min-w-0">
+      <div class="text-[15px] font-medium tracking-tight">{% if d.display_name %}{{ d.display_name }}{% else %}<span class="mono">{{ d.device_fingerprint }}</span>{% endif %}</div>
+      <div class="meta mt-1.5 flex flex-wrap items-center gap-2">
+        <span class="pill">{{ d.get_status_display }}</span>
+        <span>{{ d.bound_at }}</span>
+        {% if d.display_name %}
+          <span class="mono">{{ d.device_fingerprint }}</span>
+        {% endif %}
+      </div>
+    </div>
+    {% if d.status == "bound" %}
+    <div class="flex flex-wrap items-center gap-2">
+      <form method="post" action="{% url 'ui_rename_device' device_id=d.pk %}" class="flex items-center gap-2">
+        {% csrf_token %}
+        <input name="display_name" value="{{ d.display_name|default:'' }}" class="input h-8 w-36">
+        <button type="submit" class="btn">{% trans "Rename" %}</button>
+      </form>
+      <form method="post" action="{% url 'ui_unbind_device' device_id=d.pk %}">
+        {% csrf_token %}<button type="submit" class="btn btn-danger">{% trans "Unbind" %}</button>
+      </form>
+    </div>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="panel">
+  <p class="meta">{% trans "No devices bound yet. Bind from the licensed application." %}</p>
+</div>
 {% endif %}
 {% endblock %}

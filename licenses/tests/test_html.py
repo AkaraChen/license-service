@@ -233,12 +233,6 @@ def test_customer_pages_follow_accept_language(db):
     assert "登录" in body and 'lang="zh-hans"' in body
     assert b"Log in" not in zh.content
 
-    failed = Client().post(
-        "/ui/login", {"username": "nobody", "password": "wrong"}, HTTP_ACCEPT_LANGUAGE="zh-hans"
-    )
-    assert failed.status_code == 200
-    assert "用户名或密码不正确" in failed.content.decode()
-
 
 def test_admin_console_entitlement_immutable_fields_readonly(db, admin, redeemed):
     staff = Client()

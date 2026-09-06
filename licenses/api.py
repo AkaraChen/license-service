@@ -12,6 +12,8 @@ from django.http import JsonResponse
 from django.urls import path
 from django.utils.dateparse import parse_datetime
 from django.views.decorators.csrf import csrf_exempt
+from django_ratelimit.exceptions import Ratelimited
+from redis.exceptions import RedisError
 
 from . import audit, services
 from .models import Device, Entitlement, LicenseKey, Product
@@ -175,10 +177,21 @@ def dispatch(request, op_path, **path_params):
         if name == "issue_license_key":
             response["Cache-Control"] = "no-store, private"
         return response
-    except (Failure, OperationalError, IntegrityError, DataError, RequestDataTooBig, UnicodeError) as exc:
-        if isinstance(exc, Failure):
+    except (
+        Failure,
+        OperationalError,
+        IntegrityError,
+        DataError,
+        RequestDataTooBig,
+        UnicodeError,
+        Ratelimited,
+        RedisError,
+    ) as exc:
+        if isinstance(exc, Ratelimited):
+            error, message = "rate_limited", "Registration limit reached. Please try again later."
+        elif isinstance(exc, Failure):
             error, message = exc.error, exc.message
-        elif isinstance(exc, OperationalError):
+        elif isinstance(exc, (OperationalError, RedisError)):
             error, message = "store_unavailable", "The license store is unavailable."
         elif isinstance(exc, IntegrityError):
             error, message = "conflict", "The requested change conflicts with existing data."

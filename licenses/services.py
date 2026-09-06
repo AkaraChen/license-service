@@ -8,6 +8,7 @@ import time
 from django.conf import settings
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
+from django.core.cache import caches
 from django.db import IntegrityError, OperationalError, transaction
 from django.db.models import Value
 from django.db.models.functions import Lower
@@ -45,12 +46,12 @@ def register_account(username, password, request=None):
         raise Failure("validation_error", "password exceeds 1024 characters.")
     validate_text(username)
     validate_text(password)
-    from .registration import admit_registration, lock_registration
+    from .registration import admit_registration
 
-    admit_registration(request)
+    if request is not None:
+        admit_registration(request)
 
     def work():
-        lock_registration()
         if User.objects.count() >= settings.LICENSE_ACCOUNT_LIMIT:
             raise Failure("rate_limited", "Account capacity reached. Contact the operator.")
         if User.objects.alias(canonical=Lower("username")).filter(canonical=Lower(Value(username))).exists():
@@ -58,7 +59,8 @@ def register_account(username, password, request=None):
         return User.objects.create_user(username=username, password=password)
 
     try:
-        return _atomic(work)
+        with caches["security"].lock("registration", timeout=30, blocking_timeout=2):
+            return _atomic(work)
     except IntegrityError:
         raise Failure("conflict", gettext("This username is already taken.")) from None
 

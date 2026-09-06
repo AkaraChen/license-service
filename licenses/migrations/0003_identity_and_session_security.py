@@ -34,7 +34,7 @@ def reverse(apps, schema_editor):
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("licenses", "0003_registrationthrottle_and_more"),
+        ("licenses", "0002_device_name_constraint"),
         ("auth", "0012_alter_user_first_name_max_length"),
         ("sessions", "0001_initial"),
     ]

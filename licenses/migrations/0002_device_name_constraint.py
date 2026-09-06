@@ -2,28 +2,13 @@
 
 import django.db.models.functions.text
 import django.db.models.lookups
-import django.utils.timezone
 from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-    dependencies = [("licenses", "0002_loginthrottle")]
+    dependencies = [("licenses", "0001_initial")]
 
     operations = [
-        migrations.CreateModel(
-            name="RegistrationThrottle",
-            fields=[
-                (
-                    "id",
-                    models.BigAutoField(
-                        auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
-                    ),
-                ),
-                ("key_digest", models.CharField(max_length=64, unique=True)),
-                ("count", models.PositiveIntegerField(default=0)),
-                ("window_started_at", models.DateTimeField(db_index=True, default=django.utils.timezone.now)),
-            ],
-        ),
         migrations.AddConstraint(
             model_name="device",
             constraint=models.CheckConstraint(
@@ -36,5 +21,5 @@ class Migration(migrations.Migration):
                 ),
                 name="device_display_name_max_length",
             ),
-        ),
+        )
     ]

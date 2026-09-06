@@ -9,6 +9,7 @@ document — all served by one process.
 
 ```bash
 uv sync
+docker compose up -d redis                     # shared security counters
 export LICENSE_DEBUG=1                         # explicit local development profile
 uv run python manage.py migrate
 uv run python manage.py createsuperuser        # bootstrap: the only way to create an Admin (6.4)
@@ -40,6 +41,8 @@ All configuration is environment variables; changing any `store` field requires 
 | `LICENSE_SESSION_SECRET` | dev default | **required** when `LICENSE_DEBUG=0` (no production default) |
 | `LICENSE_DEBUG` | `0` | opt in with `1` for local development only |
 | `LICENSE_ALLOWED_HOSTS` | `localhost,127.0.0.1,[::1]` | comma-separated |
+| `LICENSE_REDIS_URL` | `redis://127.0.0.1:6379/0` | shared Redis for login/registration limits and the registration lock |
+| `LICENSE_CACHE_PREFIX` | `license-service` | namespace shared by every worker of this service |
 | `LICENSE_TRUST_PROXY` | `0` | set `1` only when a trusted edge strips/replaces `X-Forwarded-Proto` |
 | `LICENSE_REGISTRATION_SOURCE_LIMIT` | `5` | registration attempts per direct peer per hour |
 | `LICENSE_REGISTRATION_GLOBAL_LIMIT` | `100` | registration attempts across all sources per hour |
@@ -100,23 +103,28 @@ Unknown engines raise `ImproperlyConfigured("config_invalid: ...")` at settings 
   `Content-Type: application/json`, including empty writes (send `{}`). Session
   writes and login/registration reject a supplied Origin unless it exactly matches
   the request origin. HTML/Admin forms use Django CSRF tokens.
-- **Login abuse controls**: all password-login adapters (JSON, Customer UI, and
-  Django Admin) share durable License Store counters. Five failed attempts within
-  15 minutes lock the resolved account across all sources and the direct peer
-  address across all accounts for 15 minutes. Account matching retains the
-  trimmed, case-insensitive login behavior; only keyed digests are stored. A
-  successful login clears the account counter but not unrelated failures from
-  the same source. `REMOTE_ADDR` is the trusted peer boundary; forwarded-address
-  headers are ignored, so a production proxy should supply/enforce client limits
-  at its own trusted edge. Blocked callers receive the existing generic invalid-
-  credentials response, counters inactive for 30 minutes are pruned, and existing
-  sessions survive a lockout. Inactive accounts never authenticate; activation
-  changes via the application invalidate their stored sessions.
-- **Registration abuse controls**: durable source/global hourly attempt counters
-  run before password hashing. Account creation serializes registration hashes
-  across workers and checks the total account capacity under the same lock.
-  At capacity or above an attempt limit, API registration returns 429. Stale source
-  counters are pruned; forwarded client-address headers are never trusted.
+- **Login abuse controls**: `django-axes` protects JSON, Customer UI and Django
+  Admin through Django's authentication backend/signals and Axes middleware.
+  `AXES_LOCKOUT_PARAMETERS = ["username", "ip_address"]` checks the account and
+  source independently, using shared Redis counters via `django-redis`. Five
+  failures lock further logins; entries expire 15 minutes after the last counted
+  failure. Attempts during lockout do not extend it, and successful logins do not
+  reset counters (including other failures from that source). Existing sessions
+  survive a lockout. Inactive accounts never authenticate; activation changes
+  invalidate stored sessions. Project code only normalizes account names and
+  preserves the adapters' generic invalid-credentials response.
+- **Registration abuse controls**: `django-ratelimit` decorators enforce shared
+  source/global hourly limits before password hashing. HTML uses the package's
+  middleware for the 429 response; JSON preserves its audited error envelope.
+  `django-redis` supplies a registration lock for serializing account creation and
+  checking the total account capacity. Counter updates, expiry and locking are
+  library-owned. Both packages use `REMOTE_ADDR`, ignoring forwarded client-IP
+  headers; configure the trusted edge accordingly.
+- **Redis**: all workers must use the same Redis and cache namespace. The supplied
+  Compose service enables AOF and disables eviction. Redis is a required service;
+  failures do not bypass the limits (JSON login/registration returns 503). Deleting
+  its data resets the counters. Tests use a random key prefix and clean only that
+  prefix, never the whole database.
 - **Device storage**: display names are at most 200 characters, enforced by shared
   services and the database. A new binding prunes the oldest unbound rows when the
   per-entitlement history budget is full; bound rows are retained.
@@ -145,7 +153,7 @@ normative HTTP mapping: 400 `validation_error`; 401 `unauthenticated`; 403
 
 ## Security upgrade
 
-Apply migrations before starting the updated service. Migration `0004` clears all
+Apply migrations before starting the updated service. Migration `0003` clears all
 existing sessions, including old key-delivery sessions; everyone must log in again.
 It refuses to proceed if case-insensitive duplicate usernames exist, so the operator
 must resolve their ownership before retrying. The device-name constraint likewise
@@ -167,41 +175,42 @@ blank lines excluded).
 
 The domain core — entities and invariants (`models.py`), the Section 7 state
 machines (`services.py`), and the HTTP contract with validation, authorization, and
-audit logging (`api.py`) — is **584 code lines**. The expanded security controls
-exceed the original 500-line core target. Login/registration limits, audit emission
-and session invalidation live in dedicated modules; presentation uses the shared
+audit logging (`api.py`) — is **582 code lines**. The expanded security controls
+exceed the original 500-line core target. Library adapters for login/registration
+limits, audit emission and session invalidation live in dedicated modules; presentation uses the shared
 registry/services.
 
 | File | Code lines (scc) | Layer |
 | --- | --- | --- |
-| `licenses/models.py` | 74 | Persistence (entities, uniqueness invariants, login counters) |
-| `licenses/services.py` | 188 | Policy (authentication/redeem/bind/unbind/validate, seats) |
-| `licenses/api.py` | 322 | Coordination (25 ops, validation, authz, logging) |
-| **domain core subtotal** | **584** | |
-| `licenses/auth.py` | 135 | Authentication abuse controls |
-| `licenses/registration.py` | 39 | Registration admission and hash serialization |
+| `licenses/models.py` | 57 | Persistence (entities and uniqueness invariants) |
+| `licenses/services.py` | 190 | Policy (authentication/redeem/bind/unbind/validate, seats) |
+| `licenses/api.py` | 335 | Coordination (25 ops, validation, authz, logging) |
+| **domain core subtotal** | **582** | |
+| `licenses/auth.py` | 24 | Account-name and lockout-response adapters |
+| `licenses/registration.py` | 22 | django-ratelimit rules and HTML response |
 | `licenses/audit.py` | 59 | Shared audit emission |
 | `licenses/signals.py` | 14 | Session invalidation |
-| **core and security modules subtotal** | **831** | |
+| **core and security modules subtotal** | **701** | |
 | `licenses/openapi.py` | 64 | Presentation (OpenAPI from the registry) |
 | `licenses/views_ui.py` | 118 | Presentation (Customer HTML pages) |
 | `licenses/admin.py` | 155 | Presentation (Admin console config) |
 | `licenses/apps.py` | 25 | Startup preflight checks |
-| `config/`, `manage.py` | 194 | Standard Django project scaffolding |
+| `config/`, `manage.py` | 228 | Standard Django project scaffolding |
 | `licenses/templates/` | — | HTML (Django templates + Tailwind) |
 | `src/styles.css` | — | Tailwind source (compiled to `assets/css/tailwind.css`) |
-| `licenses/tests/` | 1495 | pytest suite (not counted as core) |
+| `licenses/tests/` | 1326 | pytest suite (not counted as core) |
 
 Reproduce: `scc --no-cocomo --no-size licenses/models.py licenses/services.py licenses/api.py`
 
 ## Tests
 
 ```bash
-uv run pytest                 # SQLite suite; explicit test profile
+docker compose up -d redis
+uv run pytest                 # SQLite + real Redis; explicit test profile
 uv run ruff format --check . && uv run ruff check .   # style and lint gates
 ```
 
-80 tests, organized by SPEC Section 17:
+The suite extends the original 80 conformance tests with security regressions:
 
 - `test_parsing.py` — 17.2: unknown/missing/typed fields, envelope shape, status
   mapping, session requirements, empty-list behavior.

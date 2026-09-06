@@ -2,30 +2,25 @@
 
 import threading
 from concurrent.futures import ThreadPoolExecutor
-from unittest.mock import patch
 
 import pytest
 from django.contrib.auth.models import User
 from django.db import close_old_connections, connection, transaction
 from django.test import Client
 
-from licenses import registration, services
+from licenses import services
 from licenses.models import Device, Entitlement, LicenseKey
 
 
 @pytest.mark.django_db(transaction=True)
 def test_case_variant_registration_race_has_one_winner(settings):
     settings.PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
-    original_admit = registration.admit_registration
     admission_barrier = threading.Barrier(2)
-
-    def admit_together(request):
-        original_admit(request)
-        admission_barrier.wait(timeout=5)
 
     def register(username):
         close_old_connections()
         try:
+            admission_barrier.wait(timeout=5)
             return (
                 Client()
                 .post(
@@ -38,10 +33,7 @@ def test_case_variant_registration_race_has_one_winner(settings):
         finally:
             close_old_connections()
 
-    with (
-        patch.object(registration, "admit_registration", side_effect=admit_together),
-        ThreadPoolExecutor(max_workers=2) as pool,
-    ):
+    with ThreadPoolExecutor(max_workers=2) as pool:
         statuses = list(pool.map(register, ["Alice", "alice"]))
     assert sorted(statuses) == [201, 409]
     assert User.objects.count() == 1

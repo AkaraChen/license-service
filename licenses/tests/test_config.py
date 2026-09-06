@@ -144,7 +144,7 @@ finally:
 def test_security_migration_refuses_duplicate_identities_and_retires_sessions(tmp_path):
     env = {"LICENSE_DEBUG": "1", "LICENSE_STORE_NAME": str(tmp_path / "upgrade.sqlite3")}
     assert run_manage("migrate", **env).returncode == 0
-    assert run_manage("migrate", "licenses", "0003", **env).returncode == 0
+    assert run_manage("migrate", "licenses", "0002", **env).returncode == 0
     seed = """
 from django.contrib.auth.models import User
 from django.contrib.sessions.backends.db import SessionStore

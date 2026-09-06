@@ -95,3 +95,13 @@ def redeemed(customer, issued_key):
 
 def error_class(response):
     return json.loads(response.content)["error"]
+
+
+@pytest.fixture(autouse=True)
+def isolated_security_cache():
+    from django.core.cache import caches
+
+    # delete_pattern applies this test process's random KEY_PREFIX; never FLUSHDB.
+    caches["security"].delete_pattern("*")
+    yield
+    caches["security"].delete_pattern("*")

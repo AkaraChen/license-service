@@ -7,8 +7,8 @@ add executable adversarial and integration coverage.
 
 | # | Finding | Repair | Regression evidence |
 | --- | --- | --- | --- |
-| 1 | Unbounded registration | Durable hourly peer/global attempt limits before hashing; serialized registration hashes; total account capacity | Shared JSON/HTML limits, no hashing after rejection/capacity, concurrent registration |
-| 2 | Unlimited password guesses | Shared persistent account/source lockouts in the Django backend for API, HTML and Admin | `test_login_throttling.py`, including distributed sources and SQLite contention |
+| 1 | Unbounded registration | django-ratelimit peer/global decorators with Redis; django-redis registration lock; total account capacity | Account-capacity response and concurrent identity creation |
+| 2 | Unlimited password guesses | django-axes account/source lockouts, shared Redis cache and package middleware for API, HTML and Admin | Uses the package authentication backend, signals and middleware; no duplicated counter/TTL tests |
 | 3 | Oversized names and unbounded device history | Central 200-character name validation, database constraint, bounded oldest-unbound pruning under entitlement lock | Every bind/rename adapter, direct database write, repeated unbind/rebind |
 | 4 | HTTP session disclosure | Production Secure cookies, HTTPS redirects, HSTS; proxy scheme trust is explicit | Real WSGI HTTP redirect and login Set-Cookie test |
 | 5 | Case-variant identity race | Database `LOWER(username)` unique index, transactional registration, 409 on duplicate | Concurrent `Alice`/`alice` requests; direct duplicate insert; migration refuses existing collisions |
@@ -19,12 +19,12 @@ add executable adversarial and integration coverage.
 | 10 | Revocation/suspension race | Recheck current entitlement under row lock; anonymous activation locks key then entitlement and rechecks both | Stale resolution tests plus PostgreSQL concurrent revocation commit ordering |
 | 11 | Debug disclosure and parser failures | Debug defaults off; missing production secret fails WSGI import; explicit loopback debug setting; body, Unicode and JSON validation; sanitized expected DB errors | WSGI/default configuration tests, real HTTP malformed input, surrogate/nesting/size regressions |
 | 12 | Empty-body session CSRF | Content type checked before empty-body shortcut; supplied Origin must match exactly for session/auth writes | All no-field session/admin mutations reject form media types without changes; sibling JSON origin rejected |
-| 13 | Login timing enumeration | Missing, inactive and active wrong-password attempts all pass through backend hasher work | Equal configured-hasher invocation counts for all three paths |
+| 13 | Login timing enumeration | Missing, inactive and active wrong-password attempts all pass through backend hasher work | Delegates password verification to Django ModelBackend; application tests cover active/inactive login results |
 
 ## Upgrade behavior
 
 - Configure the production secret, allowed hosts and TLS edge before starting.
-- Run migrations. Existing sessions are invalidated once by `0004`; account data
+- Run migrations. Existing sessions are invalidated once by `0003`; account data
   is retained. Duplicate identities stop migration rather than being merged.
 - Existing oversized device names must be corrected before the new constraint.
 - Database `LOWER` defines identity equivalence: SQLite's built-in case folding is
@@ -36,22 +36,40 @@ add executable adversarial and integration coverage.
 - Earlier backups cannot be repaired by this code and may contain old key-delivery
   sessions. Backup retirement remains an operator task.
 
+## Rate-limit dependencies
+
+Login counters and lockouts are handled by django-axes 8.3.1. Registration limits
+use django-ratelimit 4.1.0. django-redis 6.0.0 provides the shared cache and a
+registration lock. No project-owned throttle table, counter, expiry loop or SQLite
+counter-retry implementation remains. The migration sequence upgrades from the
+released `0001_initial` baseline.
+
+All workers must share Redis and the cache namespace. Use persistent Redis with
+no eviction; the included Compose service enables AOF and `noeviction`. Clearing
+Redis resets limits. Authentication and registration fail closed when Redis is
+unavailable. Successful logins do not reset failure counters; counted failures
+refresh their 15-minute TTL, while already-blocked attempts do not extend it.
+
 ## Validation results
 
-- SQLite: **127 passed, 2 skipped** (PostgreSQL-only lock-order tests).
-- PostgreSQL 17: **128 passed, 1 skipped** (SQLite-only lock-retry test), with
-  `psycopg[binary]==3.2.13` installed in the temporary test environment.
-- Both suites include migration upgrade checks and real WSGI HTTP cookie/redirect checks.
-- Ruff lint/format checks, Django system checks, migration drift check, and
-  `git diff --check` pass.
-- Both suites report three existing `django-unfold` deprecation warnings.
+- Application suite with SQLite and Redis 7: **116 passed, 2 skipped**
+  (PostgreSQL-only authorization lock ordering).
+- Application suite with PostgreSQL 17 and Redis 7: **118 passed**.
+- Ruff lint/format, Django system checks, migration drift, Compose configuration
+  and whitespace checks pass. Both suites report three existing django-unfold
+  deprecation warnings.
 
 ## Verification scope
 
-The tests exercise SQLite and a disposable local PostgreSQL 17 instance, including
-real database constraints and row locks. The WSGI HTTP test checks a direct HTTP
+The tests exercise SQLite, a disposable local PostgreSQL 17 instance and real Redis 7,
+including application-owned database constraints, authorization and interface responses.
+Third-party rate-limit algorithms, counters, TTL and hashing internals are not
+retested in the repository. The WSGI HTTP test checks a direct HTTP
 request and an explicitly trusted local proxy header; it does not deploy or certify
 an operator's production TLS/reverse-proxy configuration. No production data or host
 is modified, and the static scanner has not been rerun.
 
 The authentication backend follows Django's [documented backend contract](https://docs.djangoproject.com/en/6.1/topics/auth/customizing/).
+
+Package contracts: [Axes configuration](https://django-axes.readthedocs.io/en/stable/4_configuration.html),
+[django-ratelimit cache requirements](https://django-ratelimit.readthedocs.io/en/stable/installation.html).

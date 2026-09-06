@@ -7,6 +7,7 @@ LICENSE_DEBUG=0), LICENSE_DEBUG. Changing any store field requires a restart.
 """
 
 import os
+from datetime import timedelta
 from pathlib import Path
 
 from django.core.exceptions import ImproperlyConfigured
@@ -84,6 +85,8 @@ INSTALLED_APPS = [
     "admin_extra_buttons",
     "django_tailwind_cli",
     "licenses",
+    "axes",
+    "django_ratelimit",
 ]
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
@@ -94,6 +97,8 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "licenses.audit.AuditMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
+    "django_ratelimit.middleware.RatelimitMiddleware",
+    "axes.middleware.AxesMiddleware",
 ]
 ROOT_URLCONF = "config.urls"
 TEMPLATES = [
@@ -126,10 +131,32 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 TAILWIND_CLI_VERSION = "4.3.3"
 TAILWIND_CLI_SRC_CSS = "src/styles.css"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
-# The first backend enforces durable account/source login throttles. Keep the
-# stock backend configured so sessions created before this backend was added
-# remain valid; PermissionDenied prevents failed logins from falling through.
-AUTHENTICATION_BACKENDS = ["licenses.auth.ThrottledModelBackend", "django.contrib.auth.backends.ModelBackend"]
+# Packages own all rate counters, lockouts and expiry.
+CACHES = {
+    "default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"},
+    "security": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": os.environ.get("LICENSE_REDIS_URL", "redis://127.0.0.1:6379/0"),
+        "KEY_PREFIX": os.environ.get("LICENSE_CACHE_PREFIX", "license-service"),
+        "OPTIONS": {"SOCKET_CONNECT_TIMEOUT": 2, "SOCKET_TIMEOUT": 2},
+    },
+}
+AUTHENTICATION_BACKENDS = [
+    "axes.backends.AxesStandaloneBackend",
+    "licenses.auth.CaseInsensitiveBackend",
+    "django.contrib.auth.backends.ModelBackend",
+]
+AXES_HANDLER = "axes.handlers.cache.AxesCacheHandler"
+AXES_CACHE = RATELIMIT_USE_CACHE = "security"
+AXES_FAILURE_LIMIT = 5
+AXES_COOLOFF_TIME = timedelta(minutes=15)
+AXES_LOCKOUT_PARAMETERS = ["username", "ip_address"]
+AXES_USERNAME_CALLABLE = "licenses.auth.canonical_username"
+AXES_LOCKOUT_CALLABLE = "licenses.auth.lockout_response"
+AXES_RESET_COOL_OFF_ON_FAILURE_DURING_LOCKOUT = False
+AXES_RESET_ON_SUCCESS = False
+RATELIMIT_FAIL_OPEN = False
+RATELIMIT_VIEW = "licenses.registration.ratelimited"
 # Admin theme matches the customer pages: Geist, grayscale surface, one blue accent.
 UNFOLD = {
     "SITE_TITLE": "License Service",
@@ -182,5 +209,8 @@ LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
     "handlers": {"console": {"class": "logging.StreamHandler"}},
-    "loggers": {"licenses": {"handlers": ["console"], "level": "INFO"}},
+    "loggers": {
+        "licenses": {"handlers": ["console"], "level": "INFO"},
+        "axes": {"handlers": ["console"], "level": "ERROR", "propagate": False},
+    },
 }

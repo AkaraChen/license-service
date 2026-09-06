@@ -60,7 +60,7 @@ def register_page(request):
             audit.resources(request, outcome=exc.error)
             return render(request, "licenses/register.html", {"error": exc.message, "next": nxt})
         audit.resources(request, actor="admin" if user.is_staff else "customer", account_id=user.pk)
-        login(request, user, backend="licenses.auth.ThrottledModelBackend")
+        login(request, user, backend="licenses.auth.CaseInsensitiveBackend")
         return redirect(nxt or "ui_home")
     return render(request, "licenses/register.html", {"next": nxt})
 

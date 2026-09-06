@@ -1,27 +1,28 @@
 {% extends "licenses/base.html" %}
+{% load i18n %}
 {% block content %}
-<h1>Devices for {{ entitlement.product.name }}</h1>
-<p>Status: <strong class="text-ink">{{ entitlement.status }}</strong> &middot;
-   Seats: {{ seats_used }} used / {{ entitlement.max_devices }} total &middot;
-   Expires: {{ entitlement.expires_at|default:"never" }}</p>
+<h1>{% blocktrans with name=entitlement.product.name %}Devices for {{ name }}{% endblocktrans %}</h1>
+<p>{% trans "Status:" %} <strong class="text-ink">{{ entitlement.get_status_display }}</strong> &middot;
+   {% blocktrans with used=seats_used total=entitlement.max_devices %}Seats: {{ used }} used / {{ total }} total{% endblocktrans %} &middot;
+   {% trans "Expires:" %} {% if entitlement.expires_at %}{{ entitlement.expires_at }}{% else %}{% trans "never" %}{% endif %}</p>
 {% if devices %}
 <div class="overflow-x-auto">
 <table>
-  <tr><th>Fingerprint</th><th>Name</th><th>Status</th><th>Bound at</th><th></th></tr>
+  <tr><th>{% trans "Fingerprint" %}</th><th>{% trans "Name" %}</th><th>{% trans "Status" %}</th><th>{% trans "Bound at" %}</th><th></th></tr>
   {% for d in devices %}
   <tr>
     <td><code>{{ d.device_fingerprint }}</code></td>
     <td>{{ d.display_name|default:"" }}</td>
-    <td>{{ d.status }}</td>
+    <td>{{ d.get_status_display }}</td>
     <td>{{ d.bound_at }}</td>
     <td>
       {% if d.status == "bound" %}
       <form method="post" action="{% url 'ui_unbind_device' device_id=d.pk %}" class="inline">
-        {% csrf_token %}<button>Unbind</button>
+        {% csrf_token %}<button>{% trans "Unbind" %}</button>
       </form>
       <form method="post" action="{% url 'ui_rename_device' device_id=d.pk %}" class="inline">
         {% csrf_token %}<input name="display_name" value="{{ d.display_name|default:'' }}" class="mt-0 h-8 w-auto">
-        <button>Rename</button>
+        <button>{% trans "Rename" %}</button>
       </form>
       {% endif %}
     </td>
@@ -30,11 +31,11 @@
 </table>
 </div>
 {% endif %}
-<h2>Bind a new device</h2>
+<h2>{% trans "Bind a new device" %}</h2>
 <form method="post" class="max-w-sm">
   {% csrf_token %}
-  <label>Device fingerprint <input name="device_fingerprint" required maxlength="128"></label>
-  <label>Display name (optional) <input name="display_name"></label>
-  <button type="submit" class="btn-primary">Bind device</button>
+  <label>{% trans "Device fingerprint" %} <input name="device_fingerprint" required maxlength="128"></label>
+  <label>{% trans "Display name (optional)" %} <input name="display_name"></label>
+  <button type="submit" class="btn-primary">{% trans "Bind device" %}</button>
 </form>
 {% endblock %}

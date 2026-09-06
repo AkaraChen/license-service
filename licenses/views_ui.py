@@ -7,6 +7,7 @@ Django Admin at /admin/ and is never linked or exposed here.
 from django.contrib.auth import login, logout
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import redirect, render
+from django.utils.translation import gettext as _
 from django.views.decorators.http import require_POST
 
 from . import services
@@ -78,7 +79,7 @@ def _own(model, pk, user):
         or (hasattr(obj, "account_id") and obj.account_id != user.pk)
         or (hasattr(obj, "entitlement") and obj.entitlement.account_id != user.pk)
     ):
-        raise Failure("not_found", "Not found.")
+        raise Failure("not_found", _("Not found."))
     return obj
 
 

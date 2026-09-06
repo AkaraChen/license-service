@@ -104,6 +104,26 @@ def test_admin_console_never_shows_password_hash(db, admin):
     assert "pbkdf2" not in body
 
 
+def test_customer_pages_follow_accept_language(db):
+    en = Client().get("/ui/login", HTTP_ACCEPT_LANGUAGE="en")
+    assert en.status_code == 200
+    assert b"Log in" in en.content and 'lang="en"' in en.content.decode()
+
+    zh = Client().get("/ui/login", HTTP_ACCEPT_LANGUAGE="zh-CN,zh;q=0.9")
+    assert zh.status_code == 200
+    body = zh.content.decode()
+    assert "登录" in body and 'lang="zh-hans"' in body
+    assert b"Log in" not in zh.content
+
+    failed = Client().post(
+        "/ui/login",
+        {"username": "nobody", "password": "wrong"},
+        HTTP_ACCEPT_LANGUAGE="zh-hans",
+    )
+    assert failed.status_code == 200
+    assert "用户名或密码不正确" in failed.content.decode()
+
+
 def test_admin_console_entitlement_immutable_fields_readonly(db, admin, redeemed):
     staff = Client()
     staff.login(username="root", password=ADMIN_PW)

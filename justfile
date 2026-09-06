@@ -2,6 +2,7 @@
 #
 #   just serve        start locally with Tailwind watcher (default 127.0.0.1:8000)
 #   just css          rebuild production CSS
+#   just messages     compile gettext catalogs
 #   just superuser    bootstrap the only Admin account
 #   just test         run the pytest suite
 
@@ -27,6 +28,10 @@ superuser:
 # Run Django preflight checks
 check:
     uv run python manage.py check
+
+# Compile gettext catalogs (ignore site-packages)
+messages:
+    uv run python manage.py compilemessages --ignore .venv
 
 # Production CSS build (standalone Tailwind CLI, no Node)
 css:

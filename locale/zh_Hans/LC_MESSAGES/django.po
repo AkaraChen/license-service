@@ -1,0 +1,197 @@
+# License Service Simplified Chinese.
+# Copyright (C) 2026
+# This file is distributed under the same license as the license-service package.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: license-service 0.1.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-09-05 16:36+0000\n"
+"PO-Revision-Date: 2026-09-06 00:36+0800\n"
+"Last-Translator: \n"
+"Language-Team: zh_Hans\n"
+"Language: zh_Hans\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+msgid "issued"
+msgstr "已签发"
+
+msgid "redeemed"
+msgstr "已兑换"
+
+msgid "revoked"
+msgstr "已吊销"
+
+msgid "active"
+msgstr "有效"
+
+msgid "suspended"
+msgstr "已暂停"
+
+msgid "bound"
+msgstr "已绑定"
+
+msgid "unbound"
+msgstr "已解绑"
+
+msgid "username must be 1-150 characters."
+msgstr "用户名须为 1–150 个字符。"
+
+msgid "password must not be empty."
+msgstr "密码不能为空。"
+
+msgid "This username is already taken."
+msgstr "该用户名已被占用。"
+
+msgid "Invalid username or password."
+msgstr "用户名或密码不正确。"
+
+msgid "max_devices must be an integer >= 1."
+msgstr "max_devices 必须是大于等于 1 的整数。"
+
+msgid "This license key is not recognized."
+msgstr "无法识别此许可证密钥。"
+
+msgid "This license key has been revoked."
+msgstr "此许可证密钥已被吊销。"
+
+msgid "This license key was already redeemed by another account."
+msgstr "此许可证密钥已被其他账户兑换。"
+
+msgid "This account already has an entitlement for this product."
+msgstr "此账户已拥有该产品的授权。"
+
+msgid "This entitlement is suspended."
+msgstr "此授权已暂停。"
+
+msgid "This entitlement has been revoked."
+msgstr "此授权已被吊销。"
+
+msgid "This entitlement has expired."
+msgstr "此授权已过期。"
+
+msgid "device_fingerprint must not be empty."
+msgstr "device_fingerprint 不能为空。"
+
+msgid "device_fingerprint exceeds 128 characters."
+msgstr "device_fingerprint 不能超过 128 个字符。"
+
+msgid "This entitlement has no remaining device seats."
+msgstr "此授权已无剩余设备席位。"
+
+msgid "No bound device matches this fingerprint."
+msgstr "没有已绑定设备匹配此指纹。"
+
+msgid "License Service"
+msgstr "许可证服务"
+
+#, python-format
+msgid "Signed in as <strong class=\"text-ink\">%(username)s</strong>"
+msgstr "已登录为 <strong class=\"text-ink\">%(username)s</strong>"
+
+msgid "My entitlements"
+msgstr "我的授权"
+
+msgid "Redeem a key"
+msgstr "兑换密钥"
+
+msgid "Log out"
+msgstr "退出"
+
+msgid "Log in"
+msgstr "登录"
+
+msgid "Register"
+msgstr "注册"
+
+#, python-format
+msgid "Devices for %(name)s"
+msgstr "%(name)s 的设备"
+
+msgid "Status:"
+msgstr "状态："
+
+#, python-format
+msgid "Seats: %(used)s used / %(total)s total"
+msgstr "席位：已用 %(used)s / 共 %(total)s"
+
+msgid "Expires:"
+msgstr "到期："
+
+msgid "never"
+msgstr "永不过期"
+
+msgid "Fingerprint"
+msgstr "指纹"
+
+msgid "Name"
+msgstr "名称"
+
+msgid "Status"
+msgstr "状态"
+
+msgid "Bound at"
+msgstr "绑定时间"
+
+msgid "Unbind"
+msgstr "解绑"
+
+msgid "Rename"
+msgstr "重命名"
+
+msgid "Bind a new device"
+msgstr "绑定新设备"
+
+msgid "Device fingerprint"
+msgstr "设备指纹"
+
+msgid "Display name (optional)"
+msgstr "显示名称（可选）"
+
+msgid "Bind device"
+msgstr "绑定设备"
+
+msgid "Request failed"
+msgstr "请求失败"
+
+msgid "Back to my entitlements"
+msgstr "返回我的授权"
+
+msgid "Product"
+msgstr "产品"
+
+msgid "Seats"
+msgstr "席位"
+
+msgid "Expires"
+msgstr "到期"
+
+msgid "Manage devices"
+msgstr "管理设备"
+
+msgid "No entitlements yet."
+msgstr "还没有授权。"
+
+msgid "Redeem a license key"
+msgstr "兑换许可证密钥"
+
+msgid "Username"
+msgstr "用户名"
+
+msgid "Password"
+msgstr "密码"
+
+msgid "License key"
+msgstr "许可证密钥"
+
+msgid "Redeem"
+msgstr "兑换"
+
+msgid "Create account"
+msgstr "创建账户"
+
+msgid "Not found."
+msgstr "未找到。"

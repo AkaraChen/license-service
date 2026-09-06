@@ -1,10 +1,10 @@
 <!doctype html>
-{% load tailwind_cli %}
-<html lang="en">
+{% load i18n tailwind_cli %}
+<html lang="{{ LANGUAGE_CODE }}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}License Service{% endblock %}</title>
+  <title>{% block title %}{% trans "License Service" %}{% endblock %}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -14,13 +14,13 @@
   <div class="mx-auto max-w-3xl px-4 py-8">
     <nav class="mb-8 flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-line pb-4 text-sm text-ink-secondary">
       {% if user.is_authenticated %}
-        Signed in as <strong class="text-ink">{{ user.username }}</strong>
-        <a href="{% url 'ui_home' %}">My entitlements</a>
-        <a href="{% url 'ui_redeem' %}">Redeem a key</a>
-        <form method="post" action="{% url 'ui_logout' %}" class="inline">{% csrf_token %}<button>Log out</button></form>
+        {% blocktrans with username=user.username %}Signed in as <strong class="text-ink">{{ username }}</strong>{% endblocktrans %}
+        <a href="{% url 'ui_home' %}">{% trans "My entitlements" %}</a>
+        <a href="{% url 'ui_redeem' %}">{% trans "Redeem a key" %}</a>
+        <form method="post" action="{% url 'ui_logout' %}" class="inline">{% csrf_token %}<button>{% trans "Log out" %}</button></form>
       {% else %}
-        <a href="{% url 'ui_login' %}">Log in</a>
-        <a href="{% url 'ui_register' %}">Register</a>
+        <a href="{% url 'ui_login' %}">{% trans "Log in" %}</a>
+        <a href="{% url 'ui_register' %}">{% trans "Register" %}</a>
       {% endif %}
     </nav>
     {% block content %}{% endblock %}

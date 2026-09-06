@@ -58,6 +58,9 @@ Unknown engines raise `ImproperlyConfigured("config_invalid: ...")` at settings 
   (run the suite with `LICENSE_STORE_ENGINE=postgresql` for the Real Integration
   Profile).
 - **Admin UI generator**: Django Admin (`licenses/admin.py`).
+- **UI language**: Django gettext, `en` and `zh-hans`. `LocaleMiddleware` picks
+  the language from `Accept-Language`; there is no in-page switcher. Machine
+  `error` class names stay English.
 - **Logging library**: Python `logging`, logger `licenses.api`, console handler.
   Every mutating or validate call logs one record with `op`, `actor`, `account`,
   `product`, `entitlement`, `device`, `outcome`, and a request correlation id (`rid`).
@@ -129,11 +132,11 @@ Reproduce: `scc --no-cocomo --no-size licenses/models.py licenses/services.py li
 ## Tests
 
 ```bash
-uv run pytest                 # 79 tests
+uv run pytest                 # 80 tests
 uv run ruff format --check . && uv run ruff check .   # style and lint gates
 ```
 
-79 tests, organized by SPEC Section 17:
+80 tests, organized by SPEC Section 17:
 
 - `test_parsing.py` — 17.2: unknown/missing/typed fields, envelope shape, status
   mapping, session requirements, empty-list behavior.

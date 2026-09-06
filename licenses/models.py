@@ -5,6 +5,7 @@ created_at = User.date_joined. One Account type for Admin and Customer."""
 
 from django.conf import settings
 from django.db import models
+from django.utils.translation import gettext_lazy as _
 
 
 class Product(models.Model):
@@ -17,7 +18,7 @@ class Product(models.Model):
 
 
 class LicenseKey(models.Model):
-    STATUSES = (("issued", "issued"), ("redeemed", "redeemed"), ("revoked", "revoked"))
+    STATUSES = (("issued", _("issued")), ("redeemed", _("redeemed")), ("revoked", _("revoked")))
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="license_keys")
     key_hash = models.CharField(
         max_length=64, unique=True
@@ -33,7 +34,7 @@ class LicenseKey(models.Model):
 
 
 class Entitlement(models.Model):
-    STATUSES = (("active", "active"), ("suspended", "suspended"), ("revoked", "revoked"))
+    STATUSES = (("active", _("active")), ("suspended", _("suspended")), ("revoked", _("revoked")))
     account = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="entitlements"
     )
@@ -52,7 +53,7 @@ class Entitlement(models.Model):
 
 
 class Device(models.Model):
-    STATUSES = (("bound", "bound"), ("unbound", "unbound"))
+    STATUSES = (("bound", _("bound")), ("unbound", _("unbound")))
     entitlement = models.ForeignKey(Entitlement, on_delete=models.CASCADE, related_name="devices")
     device_fingerprint = models.CharField(max_length=128)  # trimmed, case-sensitive, max 128 chars
     display_name = models.CharField(max_length=200, null=True, blank=True)

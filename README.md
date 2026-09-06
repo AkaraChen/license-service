@@ -172,8 +172,9 @@ See [the finding-by-finding repair and validation record](docs/security-scan-202
 
 Django Ninja routers in `licenses/api.py` declare the 25 machine operations.
 Pydantic request schemas and explicit response field allowlists live in
-`licenses/schemas.py`; `licenses/http.py` retains the license-specific error,
-same-origin and audit policies. Ninja generates `/openapi.json` and `/docs`.
+`licenses/schemas.py`; `licenses/http.py` retains the license-specific error
+contract and staff flag. The existing audit middleware handles all adapters
+and the current JSON same-origin policy. Ninja generates `/openapi.json` and `/docs`.
 There is no operation registry, custom JSON type parser or OpenAPI builder.
 
 `licenses/services.py` and `licenses/models.py` own licensing state transitions
@@ -181,10 +182,10 @@ and persistence. Customer pages call those services; Django authentication views
 and forms own login/logout. Existing rate-limit, audit and session-invalidation
 adapters remain in `auth.py`, `registration.py`, `audit.py` and `signals.py`.
 
-For an honest audit budget include **all three** API modules, not just api.py:
+For an honest audit budget include the schemas, HTTP adapter and shared audit middleware:
 
 ```bash
-scc --no-cocomo --no-size licenses/api.py licenses/http.py licenses/schemas.py
+scc --no-cocomo --no-size licenses/api.py licenses/http.py licenses/schemas.py licenses/audit.py
 ```
 
 ## Tests

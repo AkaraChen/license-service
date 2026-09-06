@@ -1,7 +1,5 @@
 """License-specific HTTP policy around Ninja's request lifecycle."""
 
-from functools import wraps
-
 from django.core.exceptions import RequestDataTooBig
 from django.db import DataError, IntegrityError, OperationalError
 from django.http import Http404, JsonResponse
@@ -35,6 +33,7 @@ HTTP_STATUS = {
 
 
 class LicenseAPI(NinjaAPI):
+    # Public Ninja hook: keep the SPEC operation names without repeating 25 IDs.
     def get_openapi_operation_id(self, operation):
         return operation.view_func.__name__
 
@@ -87,36 +86,3 @@ for exception in (
     HttpError,
 ):
     api.add_exception_handler(exception, api_error)
-
-
-def api_boundary(view):
-    # Ninja's view-mode decorator receives the operation's bound run method.
-    name = view.__self__.view_func.__name__
-
-    @wraps(view)
-    def wrapped(request, **kwargs):
-        if name in {"activate_device", "validate_device"}:
-            audit.resources(request, actor="application")
-        try:
-            if request.method in {"POST", "PATCH"}:
-                if name not in {"activate_device", "validate_device"}:
-                    origin = request.headers.get("Origin")
-                    if origin is not None and origin != f"{request.scheme}://{request.get_host()}":
-                        raise Failure("forbidden", "Cross-origin writes are not allowed.")
-                if request.content_type != "application/json":
-                    raise Failure("validation_error", "Write bodies must be Content-Type: application/json.")
-            response = view(request, **kwargs)
-        except Failure as exc:
-            response = api_error(request, exc)
-        request.audit_context.setdefault(
-            "outcome", "success" if response.status_code < 400 else "validation_error"
-        )
-        audit.emit(name, request.audit_context)
-        if name == "issue_license_key":
-            response["Cache-Control"] = "no-store, private"
-        return response
-
-    return wrapped
-
-
-api.add_decorator(api_boundary, mode="view")

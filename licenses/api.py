@@ -5,7 +5,9 @@ from django.contrib.auth import logout as auth_logout
 from django.contrib.auth.forms import AuthenticationForm
 from django.contrib.auth.models import User
 from django.shortcuts import get_object_or_404
+from django.views.decorators.cache import never_cache
 from ninja import Router, Status
+from ninja.decorators import decorate_view
 
 from . import audit, services
 from . import schemas as s
@@ -65,6 +67,7 @@ def update_product(request, pk: int, data: s.ProductUpdate):
 
 
 @admin.post("/license-keys", response={201: s.IssuedKey, **s.ERROR_RESPONSES})
+@decorate_view(never_cache)
 def issue_license_key(request, data: s.KeyIssue):
     product = get_object_or_404(Product, pk=data.product_id)
     key, plaintext = services.issue_key(product, data.max_devices, data.expires_at)

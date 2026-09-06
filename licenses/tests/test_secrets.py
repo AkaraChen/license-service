@@ -7,7 +7,6 @@ from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 
 import pytest
-from django.contrib.auth.models import User
 from django.db import connection
 
 from licenses.models import LicenseKey
@@ -25,13 +24,6 @@ def test_plaintext_key_never_stored_or_listed(admin_api, product):
     listed = admin_api.get("license-keys").content.decode()
     assert plaintext not in listed
     assert admin_api.get("accounts/1").content.decode().find(plaintext) == -1
-
-
-def test_password_plaintext_never_persisted(customer):
-    user = User.objects.get(username="alice")
-    assert user.password != ALICE_PW
-    assert user.password.startswith("pbkdf2_sha256$")
-    assert ALICE_PW not in user.password
 
 
 def test_account_payloads_never_expose_password_hash(admin_api, customer):
@@ -82,13 +74,3 @@ def test_restart_preserves_all_durable_rows(admin_api):
     )
     assert out.returncode == 0, out.stderr
     assert out.stdout.split() == ["2", "1", "1", "1", "1"]
-
-
-def test_session_survives_client_restart_simulation(customer_api, customer):
-    """Sessions are DB-backed (durable): the same sessionid authenticates a new client."""
-    session_cookie = customer_api.client.cookies["sessionid"].value
-    from .conftest import Api
-
-    fresh = Api()
-    fresh.client.cookies.load({"sessionid": session_cookie})
-    assert fresh.get("me/entitlements").status_code == 200

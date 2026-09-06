@@ -5,8 +5,9 @@ services.py mutations as the JSON operations (5.1.1). The Admin console is
 Django Admin at /admin/ and is never linked or exposed here.
 """
 
-from django.contrib.auth import login, logout
+from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.views import LoginView
 from django.shortcuts import redirect, render
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.translation import gettext as _
@@ -65,28 +66,17 @@ def register_page(request):
     return render(request, "licenses/register.html", {"next": nxt})
 
 
-def login_page(request):
-    nxt = _safe_next(request)
-    if request.user.is_authenticated:
-        return redirect(nxt or "ui_home")
-    if request.method == "POST":
-        try:
-            user = services.authenticate_account(
-                request, request.POST.get("username"), request.POST.get("password")
-            )
-        except Failure as exc:
-            audit.resources(request, outcome=exc.error)
-            return render(request, "licenses/login.html", {"error": exc.message, "next": nxt})
-        audit.resources(request, actor="admin" if user.is_staff else "customer", account_id=user.pk)
-        login(request, user)
-        return redirect(nxt or "ui_home")
-    return render(request, "licenses/login.html", {"next": nxt})
+class CustomerLoginView(LoginView):
+    template_name = "licenses/login.html"
+    next_page = "ui_home"
+    redirect_authenticated_user = True
 
+    def get_redirect_url(self):
+        return _safe_next(self.request) or ""
 
-@require_POST
-def logout_page(request):
-    logout(request)
-    return redirect("ui_login")
+    def form_invalid(self, form):
+        audit.resources(self.request, outcome="unauthenticated")
+        return super().form_invalid(form)
 
 
 @login_required(login_url="ui_login")

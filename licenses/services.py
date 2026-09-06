@@ -5,7 +5,6 @@ import hashlib
 import secrets
 import time
 
-from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
 from django.core.cache import cache
 from django.db import IntegrityError, OperationalError, transaction
@@ -64,13 +63,6 @@ def register_account(username, password, request=None):
             return _atomic(work)
     except IntegrityError:
         raise Failure("conflict", gettext("This username is already taken.")) from None
-
-
-def authenticate_account(request, username, password):
-    user = authenticate(request, username=(username or "").strip(), password=password or "")
-    if user is None or not user.is_active:
-        raise Failure("unauthenticated", gettext("Invalid username or password."))
-    return user
 
 
 def issue_key(product, max_devices, expires_at=None):

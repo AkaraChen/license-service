@@ -5,6 +5,7 @@ for URL patterns, validation, and OpenAPI (Section 12). Error envelope
 import json
 
 from django.contrib.auth import login, logout
+from django.contrib.auth.forms import AuthenticationForm
 from django.contrib.auth.models import User
 from django.core.exceptions import RequestDataTooBig
 from django.db import DataError, IntegrityError, OperationalError
@@ -245,7 +246,10 @@ def register(request, data, ctx):
 
 @op("login", "POST", "auth/login", "anonymous", (("username", "str", True), ("password", "str", True)))
 def login_op(request, data, ctx):
-    user = services.authenticate_account(request, data["username"], data["password"])
+    form = AuthenticationForm(request, data=data)
+    if not form.is_valid():
+        raise Failure("unauthenticated", "Invalid username or password.")
+    user = form.get_user()
     login(request, user)
     ctx.update(actor="admin" if user.is_staff else "customer", account_id=user.pk)
     return {"account": account_json(user)}, 200

@@ -4,7 +4,7 @@
 {% block content %}
 <div class="panel w-full max-w-[400px] p-8">
   <h1 class="page-title mb-6 text-2xl leading-8 tracking-[-0.03em]">{% trans "Log in" %}</h1>
-  {% if error %}<p class="error mb-5">{{ error }}</p>{% endif %}
+  {% if form.errors %}<div class="error mb-5">{{ form.non_field_errors }}{{ form.username.errors }}{{ form.password.errors }}</div>{% endif %}
   <form method="post">
     {% csrf_token %}
     {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}

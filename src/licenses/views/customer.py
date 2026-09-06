@@ -18,6 +18,20 @@ from ..services import Failure
 from .forms import DeviceNameForm, RedeemForm, RegistrationForm
 
 
+def _entitlement_response(request, entitlement, *, error=None, rename_forms=None, status=200):
+    forms = rename_forms or {}
+    rows = [
+        (d, forms.get(d.pk) or DeviceNameForm(initial={"display_name": d.display_name}))
+        for d in entitlement.devices.order_by("pk")
+    ]
+    return render(
+        request,
+        "licenses/entitlement.html",
+        {"entitlement": entitlement, "devices": rows, "error": error},
+        status=status,
+    )
+
+
 def register_page(request):
     if request.user.is_authenticated:
         return redirect("ui_home")
@@ -76,11 +90,7 @@ def redeem_page(request):
 @require_GET
 def entitlement_page(request, entitlement_id):
     entitlement = get_object_or_404(Entitlement, pk=entitlement_id, account=request.user)
-    return render(
-        request,
-        "licenses/entitlement.html",
-        {"entitlement": entitlement, "devices": entitlement.devices.order_by("pk")},
-    )
+    return _entitlement_response(request, entitlement)
 
 
 @login_required(login_url="ui_login")
@@ -91,16 +101,7 @@ def unbind_page(request, device_id):
         services.unbind(device)
     except Failure as exc:
         audit.resources(request, outcome=exc.error)
-        return render(
-            request,
-            "licenses/entitlement.html",
-            {
-                "entitlement": device.entitlement,
-                "devices": device.entitlement.devices.order_by("pk"),
-                "error": exc.message,
-            },
-            status=400,
-        )
+        return _entitlement_response(request, device.entitlement, error=exc.message, status=400)
     audit.resources(request, entitlement_id=device.entitlement_id, product_id=device.entitlement.product_id)
     return redirect("ui_entitlement", entitlement_id=device.entitlement_id)
 
@@ -112,25 +113,16 @@ def rename_page(request, device_id):
     form = DeviceNameForm(request.POST)
     if not form.is_valid():
         audit.resources(request, outcome="validation_error")
-    else:
-        try:
-            services.rename_device(device, **form.cleaned_data)
-        except Failure as exc:
-            audit.resources(request, outcome=exc.error)
-            form.add_error(None, exc.message)
-        else:
-            audit.resources(
-                request, entitlement_id=device.entitlement_id, product_id=device.entitlement.product_id
-            )
-            return redirect("ui_entitlement", entitlement_id=device.entitlement_id)
-    return render(
-        request,
-        "licenses/entitlement.html",
-        {
-            "entitlement": device.entitlement,
-            "devices": device.entitlement.devices.order_by("pk"),
-            "rename_form": form,
-            "rename_device_id": device.pk,
-        },
-        status=400,
-    )
+        return _entitlement_response(
+            request, device.entitlement, rename_forms={device.pk: form}, status=400
+        )
+    try:
+        services.rename_device(device, **form.cleaned_data)
+    except Failure as exc:
+        audit.resources(request, outcome=exc.error)
+        form.add_error(None, exc.message)
+        return _entitlement_response(
+            request, device.entitlement, rename_forms={device.pk: form}, status=400
+        )
+    audit.resources(request, entitlement_id=device.entitlement_id, product_id=device.entitlement.product_id)
+    return redirect("ui_entitlement", entitlement_id=device.entitlement_id)

@@ -21,32 +21,28 @@
 {% if error %}<p class="error">{{ error }}</p>{% endif %}
 {% if devices %}
 <div class="card-grid">
-  {% for device in devices %}
-  {% with label=device.display_name|default:device.device_fingerprint %}
+  {% for d, rename_form in devices %}
+  {% with label=d.display_name|default:d.device_fingerprint %}
   <div class="card" x-data>
     <div class="flex items-center justify-between gap-2">
-      <div class="min-w-0 truncate text-[15px] font-medium tracking-tight">{% if device.display_name %}{{ device.display_name }}{% else %}<span class="mono">{{ device.device_fingerprint }}</span>{% endif %}</div>
-      <span class="pill {% if device.status == 'bound' %}pill-success{% else %}pill-danger{% endif %}">{{ device.get_status_display }}</span>
+      <div class="min-w-0 truncate text-[15px] font-medium tracking-tight">{% if d.display_name %}{{ d.display_name }}{% else %}<span class="mono">{{ d.device_fingerprint }}</span>{% endif %}</div>
+      <span class="pill {% if d.status == 'bound' %}pill-success{% else %}pill-danger{% endif %}">{{ d.get_status_display }}</span>
     </div>
-    <div class="meta mt-3">{{ device.bound_at }}</div>
-    {% if device.status == "bound" %}
+    <div class="meta mt-3">{{ d.bound_at }}</div>
+    {% if d.status == "bound" %}
     <div class="mt-5 flex gap-2">
       <button type="button" class="btn btn-primary" @click="$refs.rename.showModal(); $nextTick(() => $refs.name.focus())">{% trans "Rename" %}</button>
       <button type="button" class="btn btn-danger" @click="$refs.unbind.showModal()">{% trans "Unbind" %}</button>
     </div>
     <dialog class="dialog" x-ref="rename" @click.self="$el.close()">
-      <form method="post" action="{% url 'ui_rename_device' device_id=device.pk %}">
+      <form method="post" action="{% url 'ui_rename_device' device_id=d.pk %}">
         {% csrf_token %}
         <div class="dialog-head">
           <i class="ph ph-pencil-simple dialog-icon" aria-hidden="true"></i>
           <h2 class="dialog-title">{% trans "Rename" %}</h2>
         </div>
-        {% if rename_form and rename_device_id == device.pk %}
         {{ rename_form.non_field_errors }}
         <label class="field"><span>{% trans "Name" %}</span>{{ rename_form.display_name }}{{ rename_form.display_name.errors }}</label>
-        {% else %}
-        <label class="field"><span>{% trans "Name" %}</span><input type="text" name="display_name" maxlength="200" required x-ref="name" value="{{ device.display_name|default:'' }}"></label>
-        {% endif %}
         <div class="dialog-actions">
           <button type="button" class="btn" @click="$refs.rename.close()">{% trans "Cancel" %}</button>
           <button type="submit" class="btn btn-primary">{% trans "Rename" %}</button>
@@ -54,7 +50,7 @@
       </form>
     </dialog>
     <dialog class="dialog" x-ref="unbind" @click.self="$el.close()">
-      <form method="post" action="{% url 'ui_unbind_device' device_id=device.pk %}">
+      <form method="post" action="{% url 'ui_unbind_device' device_id=d.pk %}">
         {% csrf_token %}
         <div class="dialog-head">
           <i class="ph ph-link-break dialog-icon" aria-hidden="true"></i>

@@ -121,7 +121,7 @@ def entitlement_page(request, entitlement_id):
             "entitlement": entitlement,
             "devices": entitlement.devices.order_by("pk"),
             "seats_used": bound,
-            "seats_free": entitlement.max_devices - bound,
+            "seats_available": max(0, entitlement.max_devices - bound),
         },
     )
 

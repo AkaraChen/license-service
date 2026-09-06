@@ -11,8 +11,8 @@
   <div>
     <h1 class="page-title">{% blocktrans with name=entitlement.product.name %}Devices for {{ name }}{% endblocktrans %}</h1>
     <p class="page-lead">
-      <span class="pill">{{ entitlement.get_status_display }}</span>
-      <span class="ml-2">{% blocktrans with used=seats_used total=entitlement.max_devices %}Seats: {{ used }} used / {{ total }} total{% endblocktrans %}</span>
+      <span class="pill {% if entitlement.status == 'active' %}pill-success{% else %}pill-danger{% endif %}">{{ entitlement.get_status_display }}</span>
+      <span class="ml-2">{% blocktrans with avail=seats_available total=entitlement.max_devices %}{{ avail }} of {{ total }} seats available{% endblocktrans %}</span>
       <span class="mx-1.5 text-ink-muted">·</span>
       <span>{% trans "Expires" %} {% if entitlement.expires_at %}{{ entitlement.expires_at }}{% else %}{% trans "never" %}{% endif %}</span>
     </p>
@@ -23,14 +23,14 @@
   {% for d in devices %}
   {% with label=d.display_name|default:d.device_fingerprint %}
   <div class="card" x-data>
-    <div class="text-[15px] font-medium tracking-tight">{% if d.display_name %}{{ d.display_name }}{% else %}<span class="mono">{{ d.device_fingerprint }}</span>{% endif %}</div>
-    <div class="mt-3 flex flex-wrap items-center gap-2">
-      <span class="pill">{{ d.get_status_display }}</span>
+    <div class="flex items-center justify-between gap-2">
+      <div class="min-w-0 truncate text-[15px] font-medium tracking-tight">{% if d.display_name %}{{ d.display_name }}{% else %}<span class="mono">{{ d.device_fingerprint }}</span>{% endif %}</div>
+      <span class="pill {% if d.status == 'bound' %}pill-success{% else %}pill-danger{% endif %}">{{ d.get_status_display }}</span>
     </div>
     <div class="meta mt-3">{{ d.bound_at }}</div>
     {% if d.status == "bound" %}
     <div class="mt-5 flex gap-2">
-      <button type="button" class="btn" @click="$refs.rename.showModal(); $nextTick(() => $refs.name.focus())">{% trans "Rename" %}</button>
+      <button type="button" class="btn btn-primary" @click="$refs.rename.showModal(); $nextTick(() => $refs.name.focus())">{% trans "Rename" %}</button>
       <button type="button" class="btn btn-danger" @click="$refs.unbind.showModal()">{% trans "Unbind" %}</button>
     </div>
     <dialog class="dialog" x-ref="rename" @click.self="$el.close()">

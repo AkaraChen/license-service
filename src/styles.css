@@ -19,6 +19,8 @@
   --color-accent-hover: #005ff2;
   --color-danger: #ea001d;
   --color-danger-soft: #fff0f2;
+  --color-success: #28a948;
+  --color-success-soft: #f3fcf5;
 
   --radius-sm: 6px;
   --radius-md: 12px;
@@ -71,14 +73,6 @@
 
   .header-end {
     @apply ml-auto flex shrink-0 items-center gap-2;
-  }
-
-  .header-end .btn {
-    @apply h-8;
-  }
-
-  .header-end .btn-primary {
-    @apply h-8;
   }
 
   .shell {
@@ -140,7 +134,7 @@
   }
 
   .btn-primary {
-    @apply h-10 border-ink bg-ink text-surface;
+    @apply border-ink bg-ink text-surface;
   }
 
   .btn-primary:hover {
@@ -156,12 +150,16 @@
   }
 
   .btn-danger-solid {
-    @apply h-10 border-danger bg-danger text-surface;
+    @apply border-danger bg-danger text-surface;
   }
 
   .btn-danger-solid:hover {
     @apply border-danger bg-danger text-surface;
     filter: brightness(0.92);
+  }
+
+  .btn-lg {
+    @apply h-10;
   }
 
   .dialog {
@@ -194,12 +192,6 @@
 
   .dialog-actions {
     @apply mt-6 flex items-center justify-end gap-2;
-  }
-
-  .dialog-actions .btn,
-  .dialog-actions .btn-primary,
-  .dialog-actions .btn-danger-solid {
-    @apply h-8;
   }
 
   .link {
@@ -236,6 +228,14 @@
 
   .pill {
     @apply inline-flex items-center rounded-sm border border-line px-1.5 py-0.5 text-[12px] leading-4 text-ink-secondary;
+  }
+
+  .pill-success {
+    @apply border-success/20 bg-success-soft text-success;
+  }
+
+  .pill-danger {
+    @apply border-danger/20 bg-danger-soft text-danger;
   }
 
   .mono {

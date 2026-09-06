@@ -118,6 +118,10 @@ msgstr "状态："
 msgid "Seats: %(used)s used / %(total)s total"
 msgstr "席位：已用 %(used)s / 共 %(total)s"
 
+#, python-format
+msgid "%(avail)s of %(total)s seats available"
+msgstr "%(total)s 个席位中 %(avail)s 个可用"
+
 msgid "Expires:"
 msgstr "到期："
 

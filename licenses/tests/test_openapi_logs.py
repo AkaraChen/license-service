@@ -72,15 +72,17 @@ def test_mutating_calls_log_actor_and_outcome(api, customer_api, redeemed, caplo
         customer_api.post("me/redeem", {"license_key": plaintext})  # idempotent re-redeem
         api.post("activate", {"license_key": plaintext, "device_fingerprint": "m1"})
         api.post("validate", {"license_key": plaintext, "device_fingerprint": "ghost"})
-    messages = [r.getMessage() for r in caplog.records]
+    messages = [json.loads(r.getMessage()) for r in caplog.records if r.name == "licenses.api"]
     assert any(
-        "op=redeem_license_key" in m and "actor=customer" in m and "outcome=success" in m for m in messages
+        m["op"] == "redeem_license_key" and m["actor"] == "customer" and m["outcome"] == "success"
+        for m in messages
     )
     assert any(
-        "op=activate_device" in m and "actor=application" in m and "outcome=success" in m for m in messages
+        m["op"] == "activate_device" and m["actor"] == "application" and m["outcome"] == "success"
+        for m in messages
     )
-    assert any("op=validate_device" in m and "outcome=unknown_device" in m for m in messages)
-    assert any("rid=" in m for m in messages)
+    assert any(m["op"] == "validate_device" and m["outcome"] == "unknown_device" for m in messages)
+    assert any("rid" in m for m in messages)
 
 
 def test_logs_never_contain_secrets_or_raw_fingerprints(

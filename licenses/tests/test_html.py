@@ -16,12 +16,14 @@ def test_admin_console_requires_admin_session(db, admin, customer):
     assert response.status_code == 302 and "/admin/login" in response["Location"]
 
     non_admin = Client()
-    non_admin.login(username="alice", password=ALICE_PW)
+    non_admin.post(
+        "/api/auth/login", {"username": "alice", "password": ALICE_PW}, content_type="application/json"
+    )
     response = non_admin.get("/admin/")
     assert response.status_code == 302 and "/admin/login" in response["Location"]
 
     staff = Client()
-    staff.login(username="root", password=ADMIN_PW)
+    staff.post("/api/auth/login", {"username": "root", "password": ADMIN_PW}, content_type="application/json")
     home = staff.get("/admin/")
     assert home.status_code == 200
     assert b"unfold" in home.content
@@ -117,7 +119,9 @@ def test_register_returns_to_next(db):
 
 def test_customer_pages_never_link_admin_console(db, customer, redeemed):
     browser = Client()
-    browser.login(username="alice", password=ALICE_PW)
+    browser.post(
+        "/api/auth/login", {"username": "alice", "password": ALICE_PW}, content_type="application/json"
+    )
     entitlement, _ = redeemed
     for path in ("/", "/ui/redeem", f"/ui/entitlements/{entitlement.pk}"):
         body = browser.get(path).content.decode()
@@ -127,7 +131,9 @@ def test_customer_pages_never_link_admin_console(db, customer, redeemed):
 def test_customer_cannot_open_foreign_entitlement_page(db, customer, other_customer, redeemed):
     entitlement, _ = redeemed
     bob_browser = Client()
-    bob_browser.login(username="bob", password="bob-pw-123")
+    bob_browser.post(
+        "/api/auth/login", {"username": "bob", "password": "bob-pw-123"}, content_type="application/json"
+    )
     response = bob_browser.get(f"/ui/entitlements/{entitlement.pk}")
     assert response.status_code == 400  # error page, no data leaked
     assert b"Not found" in response.content
@@ -135,7 +141,7 @@ def test_customer_cannot_open_foreign_entitlement_page(db, customer, other_custo
 
 def test_admin_console_issue_key_shows_plaintext_once(db, admin, product):
     staff = Client()
-    staff.login(username="root", password=ADMIN_PW)
+    staff.post("/api/auth/login", {"username": "root", "password": ADMIN_PW}, content_type="application/json")
     response = staff.post(
         "/admin/licenses/licensekey/add/", {"product": product.pk, "max_devices": "2"}, follow=True
     )
@@ -152,14 +158,16 @@ def test_admin_console_batch_issue_requires_admin_session(db, customer):
     assert anonymous.status_code == 302 and "/admin/login" in anonymous["Location"]
 
     non_admin = Client()
-    non_admin.login(username="alice", password=ALICE_PW)
+    non_admin.post(
+        "/api/auth/login", {"username": "alice", "password": ALICE_PW}, content_type="application/json"
+    )
     response = non_admin.get(path)
     assert response.status_code == 302 and "/admin/login" in response["Location"]
 
 
 def test_admin_console_batch_issue_creates_keys_and_shows_plaintext_once(db, admin, product):
     staff = Client()
-    staff.login(username="root", password=ADMIN_PW)
+    staff.post("/api/auth/login", {"username": "root", "password": ADMIN_PW}, content_type="application/json")
 
     changelist = staff.get("/admin/licenses/licensekey/").content.decode()
     assert "Issue batch" in changelist
@@ -201,7 +209,7 @@ def test_admin_console_batch_issue_creates_keys_and_shows_plaintext_once(db, adm
         assert key[:12] in again
 
     zh = Client()
-    zh.login(username="root", password=ADMIN_PW)
+    zh.post("/api/auth/login", {"username": "root", "password": ADMIN_PW}, content_type="application/json")
     zh_page = zh.get("/admin/licenses/licensekey/issue_batch/", HTTP_ACCEPT_LANGUAGE="zh-hans")
     assert zh_page.status_code == 200
     assert "批量签发" in zh_page.content.decode()
@@ -209,7 +217,7 @@ def test_admin_console_batch_issue_creates_keys_and_shows_plaintext_once(db, adm
 
 def test_admin_console_never_shows_password_hash(db, admin):
     staff = Client()
-    staff.login(username="root", password=ADMIN_PW)
+    staff.post("/api/auth/login", {"username": "root", "password": ADMIN_PW}, content_type="application/json")
     body = staff.get(f"/admin/auth/user/{admin.pk}/change/").content.decode()
     assert "pbkdf2" not in body
 
@@ -234,7 +242,7 @@ def test_customer_pages_follow_accept_language(db):
 
 def test_admin_console_entitlement_immutable_fields_readonly(db, admin, redeemed):
     staff = Client()
-    staff.login(username="root", password=ADMIN_PW)
+    staff.post("/api/auth/login", {"username": "root", "password": ADMIN_PW}, content_type="application/json")
     entitlement, _ = redeemed
     body = staff.get(f"/admin/licenses/entitlement/{entitlement.pk}/change/").content.decode()
     assert 'name="status"' in body

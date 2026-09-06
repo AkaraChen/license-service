@@ -5,6 +5,8 @@ created_at = User.date_joined. One Account type for Admin and Customer."""
 
 from django.conf import settings
 from django.db import models
+from django.db.models.functions import Length
+from django.db.models.lookups import LessThanOrEqual
 from django.utils.translation import gettext_lazy as _
 
 
@@ -61,3 +63,12 @@ class Device(models.Model):
     status = models.CharField(
         max_length=10, choices=STATUSES, default="bound"
     )  # only "bound" occupies a seat
+
+    class Meta:
+        constraints = [  # noqa: RUF012 - Django Meta idiom
+            models.CheckConstraint(
+                condition=models.Q(display_name__isnull=True)
+                | models.Q(LessThanOrEqual(Length("display_name"), 200)),
+                name="device_display_name_max_length",
+            )
+        ]

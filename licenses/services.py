@@ -7,12 +7,17 @@ import time
 
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
-from django.db import OperationalError, transaction
+from django.core.cache import cache
+from django.db import IntegrityError, OperationalError, transaction
+from django.db.models import Value
+from django.db.models.functions import Lower
 from django.utils import timezone
 from django.utils.translation import gettext
 
 from .models import Entitlement, LicenseKey
 
+MAX_ACCOUNTS = 10_000
+DEVICE_HISTORY_LIMIT = 100
 FINGERPRINT_MAX_LENGTH = 128
 USERNAME_MAX_LENGTH = 150
 _KEY_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789"  # 32 chars from 29 symbols: ~155 bits (4.1.3)
@@ -31,23 +36,39 @@ def hash_key(plaintext):
     return hashlib.sha256(plaintext.encode("utf-8")).hexdigest()
 
 
-def register_account(username, password):
+def register_account(username, password, request=None):
     """Open self-registration. Invariant 4: always is_admin=False."""
     username = (username or "").strip()
     if not username or len(username) > USERNAME_MAX_LENGTH:
         raise Failure("validation_error", gettext("username must be 1-150 characters."))
     if not password:
         raise Failure("validation_error", gettext("password must not be empty."))
-    if User.objects.filter(username__iexact=username).exists():
-        raise Failure("conflict", gettext("This username is already taken."))
-    return User.objects.create_user(username=username, password=password)
+    if len(password) > 1024:
+        raise Failure("validation_error", "password exceeds 1024 characters.")
+    validate_text(username)
+    validate_text(password)
+    from .registration import admit_registration
+
+    if request is not None:
+        admit_registration(request)
+
+    def work():
+        if User.objects.count() >= MAX_ACCOUNTS:
+            raise Failure("rate_limited", "Account capacity reached. Contact the operator.")
+        if User.objects.alias(canonical=Lower("username")).filter(canonical=Lower(Value(username))).exists():
+            raise Failure("conflict", gettext("This username is already taken."))
+        return User.objects.create_user(username=username, password=password)
+
+    try:
+        with cache.lock("registration", timeout=30, blocking_timeout=2):
+            return _atomic(work)
+    except IntegrityError:
+        raise Failure("conflict", gettext("This username is already taken.")) from None
 
 
 def authenticate_account(request, username, password):
-    user = User.objects.filter(username__iexact=(username or "").strip()).first()
-    if user is not None and user.is_active:
-        user = authenticate(request, username=user.username, password=password or "")
-    if user is None:
+    user = authenticate(request, username=(username or "").strip(), password=password or "")
+    if user is None or not user.is_active:
         raise Failure("unauthenticated", gettext("Invalid username or password."))
     return user
 
@@ -143,19 +164,35 @@ def normalize_fingerprint(raw):
     return fp
 
 
-def bind(entitlement, raw_fingerprint, display_name=None):
+def bind(entitlement, raw_fingerprint, display_name=None, *, source_key_id=None):
     """Section 7.5. Returns (device, created); same fingerprint is idempotent."""
-    check_active(entitlement)
     fp = normalize_fingerprint(raw_fingerprint)
+    display_name = normalize_display_name(display_name)
 
     def work():
+        if source_key_id is not None:
+            key = LicenseKey.objects.select_for_update().get(pk=source_key_id)
+            if key.status == "revoked":
+                raise Failure("key_revoked", gettext("This license key has been revoked."))
+            if key.status != "redeemed":
+                raise Failure("unknown_key", gettext("This license key is not recognized."))
         locked = Entitlement.objects.select_for_update().get(pk=entitlement.pk)
+        if source_key_id is not None and locked.source_key_id != source_key_id:
+            raise Failure("unknown_key", gettext("This license key is not recognized."))
+        check_active(locked)
         existing = locked.devices.filter(device_fingerprint=fp, status="bound").first()
         if existing is not None:
             return existing, False
         if locked.devices.filter(status="bound").count() >= locked.max_devices:
             raise Failure("seat_exhausted", gettext("This entitlement has no remaining device seats."))
-        return locked.devices.create(device_fingerprint=fp, display_name=display_name or None), True
+        budget = max(DEVICE_HISTORY_LIMIT, locked.max_devices)
+        excess = locked.devices.count() - budget + 1
+        if excess > 0:
+            stale_ids = list(
+                locked.devices.filter(status="unbound").order_by("pk").values_list("pk", flat=True)[:excess]
+            )
+            locked.devices.filter(pk__in=stale_ids).delete()
+        return locked.devices.create(device_fingerprint=fp, display_name=display_name), True
 
     return _atomic(work)
 
@@ -191,4 +228,27 @@ def validate(plaintext, raw_fingerprint):
     ).first()
     if device is None:
         raise Failure("unknown_device", gettext("No bound device matches this fingerprint."))
+    return device
+
+
+def validate_text(value):
+    if "\x00" in value:
+        raise Failure("validation_error", "Text must not contain null characters.")
+    try:
+        value.encode("utf-8")
+    except UnicodeError:
+        raise Failure("validation_error", "Text must contain valid Unicode characters.") from None
+
+
+def normalize_display_name(value):
+    if value is not None:
+        validate_text(value)
+        if len(value) > 200:
+            raise Failure("validation_error", "display_name exceeds 200 characters.")
+    return value or None
+
+
+def rename_device(device, display_name):
+    device.display_name = normalize_display_name(display_name)
+    device.save(update_fields=("display_name",))
     return device

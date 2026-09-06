@@ -6,9 +6,6 @@
 #   just superuser    bootstrap the only Admin account
 #   just test         run the pytest suite
 
-host := env("LICENSE_LISTEN_HOST", "127.0.0.1")
-port := env("LICENSE_LISTEN_PORT", "8000")
-
 # List recipes
 default:
     @just --list
@@ -38,8 +35,9 @@ css:
     uv run python manage.py tailwind build
 
 # Migrate and start the service with a Tailwind watcher
-serve: migrate
-    uv run python manage.py tailwind runserver {{ host }}:{{ port }}
+serve:
+    LICENSE_DEBUG=1 uv run python manage.py migrate
+    LICENSE_DEBUG=1 uv run python manage.py tailwind runserver 127.0.0.1:8000
 
 alias run := serve
 alias start := serve
@@ -50,7 +48,7 @@ manage *args:
 
 # Run the pytest suite
 test *args:
-    uv run pytest {{ args }}
+    LICENSE_DEBUG=1 uv run pytest {{ args }}
 
 # Format with ruff
 fmt:

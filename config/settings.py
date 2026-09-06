@@ -1,51 +1,36 @@
-"""Configuration (SPEC Section 6). Resolution: environment variables only.
-
-Core fields (Section 6.5): LICENSE_LISTEN_HOST / LICENSE_LISTEN_PORT (defaults
-127.0.0.1:8000, used by `manage.py runserver $LISTEN_HOST:$LISTEN_PORT`),
-LICENSE_STORE_* (the `store` bundle), LICENSE_SESSION_SECRET (required when
-LICENSE_DEBUG=0), LICENSE_DEBUG. Changing any store field requires a restart.
-"""
+"""Production defaults; local development opts in with LICENSE_DEBUG=1."""
 
 import os
+from datetime import timedelta
 from pathlib import Path
 
+import dj_database_url
 from django.core.exceptions import ImproperlyConfigured
 from django.templatetags.static import static
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-DEBUG = os.environ.get("LICENSE_DEBUG", "1") == "1"
-DEV_SECRET_KEY = "django-insecure-development-default"
-SECRET_KEY = os.environ.get("LICENSE_SESSION_SECRET", DEV_SECRET_KEY)
-LISTEN_HOST = os.environ.get("LICENSE_LISTEN_HOST", "127.0.0.1")
-LISTEN_PORT = int(os.environ.get("LICENSE_LISTEN_PORT", "8000"))
-ALLOWED_HOSTS = os.environ.get("LICENSE_ALLOWED_HOSTS", "*").split(",")
+DEBUG = os.environ.get("LICENSE_DEBUG", "0") == "1"
+SECRET_KEY = os.environ.get("LICENSE_SESSION_SECRET", "")
+ALLOWED_HOSTS = os.environ.get("LICENSE_ALLOWED_HOSTS", "localhost,127.0.0.1,[::1]").split(",")
+if DEBUG:
+    SECRET_KEY = SECRET_KEY or "django-insecure-development-default"
+elif not SECRET_KEY or SECRET_KEY == "django-insecure-development-default":
+    raise ImproperlyConfigured("config_invalid: licenses.E001: LICENSE_SESSION_SECRET is required.")
 
-# `store` bundle (Section 6.2): which durable engine and how to open it.
-# Supported engines: "sqlite3" (default; LICENSE_STORE_NAME = file path) and
-# "postgresql" (LICENSE_STORE_NAME/USER/PASSWORD/HOST/PORT).
-_engine = os.environ.get("LICENSE_STORE_ENGINE", "sqlite3")
-if _engine == "sqlite3":
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.sqlite3",
-            "NAME": os.environ.get("LICENSE_STORE_NAME", str(BASE_DIR / "license_store.sqlite3")),
-            "TEST": {"NAME": BASE_DIR / "test_license_store.sqlite3"},
-        }
-    }
-elif _engine == "postgresql":
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.postgresql",
-            "NAME": os.environ.get("LICENSE_STORE_NAME", "licenses"),
-            "USER": os.environ.get("LICENSE_STORE_USER", ""),
-            "PASSWORD": os.environ.get("LICENSE_STORE_PASSWORD", ""),
-            "HOST": os.environ.get("LICENSE_STORE_HOST", "127.0.0.1"),
-            "PORT": os.environ.get("LICENSE_STORE_PORT", "5432"),
-        }
-    }
-else:
-    raise ImproperlyConfigured(f"config_invalid: unknown LICENSE_STORE_ENGINE {_engine!r}")
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
+SECURE_SSL_REDIRECT = not DEBUG
+SECURE_HSTS_SECONDS = 31536000 if not DEBUG else 0
+# Opt in only behind an edge that strips and replaces X-Forwarded-Proto.
+if os.environ.get("LICENSE_TRUST_PROXY", "0") == "1":
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+DATA_UPLOAD_MAX_MEMORY_SIZE = 16384
+DATABASES = {
+    "default": dj_database_url.config(
+        env="LICENSE_DATABASE_URL", default=f"sqlite:///{BASE_DIR / 'license_store.sqlite3'}"
+    )
+}
 
 INSTALLED_APPS = [
     "unfold",  # before django.contrib.admin so its templates win
@@ -58,6 +43,8 @@ INSTALLED_APPS = [
     "admin_extra_buttons",
     "django_tailwind_cli",
     "licenses",
+    "axes",
+    "django_ratelimit",
 ]
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
@@ -66,7 +53,10 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "licenses.audit.AuditMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
+    "django_ratelimit.middleware.RatelimitMiddleware",
+    "axes.middleware.AxesMiddleware",
 ]
 ROOT_URLCONF = "config.urls"
 TEMPLATES = [
@@ -99,6 +89,24 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 TAILWIND_CLI_VERSION = "4.3.3"
 TAILWIND_CLI_SRC_CSS = "src/styles.css"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+# Packages own all rate counters, lockouts and expiry.
+CACHES = {
+    "default": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": os.environ.get("LICENSE_REDIS_URL", "redis://127.0.0.1:6379/0"),
+        "KEY_PREFIX": "license-service",
+        "OPTIONS": {"SOCKET_CONNECT_TIMEOUT": 2, "SOCKET_TIMEOUT": 2},
+    }
+}
+AUTHENTICATION_BACKENDS = ["axes.backends.AxesStandaloneBackend", "licenses.auth.CaseInsensitiveBackend"]
+AXES_HANDLER = "axes.handlers.cache.AxesCacheHandler"
+AXES_FAILURE_LIMIT = 5
+AXES_COOLOFF_TIME = timedelta(minutes=15)
+AXES_LOCKOUT_PARAMETERS = ["username", "ip_address"]
+AXES_USERNAME_CALLABLE = "licenses.auth.canonical_username"
+AXES_LOCKOUT_CALLABLE = "licenses.auth.lockout_response"
+AXES_RESET_COOL_OFF_ON_FAILURE_DURING_LOCKOUT = False
+RATELIMIT_VIEW = "licenses.registration.ratelimited"
 # Admin theme matches the customer pages: Geist, grayscale surface, one blue accent.
 UNFOLD = {
     "SITE_TITLE": "License Service",
@@ -151,5 +159,8 @@ LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
     "handlers": {"console": {"class": "logging.StreamHandler"}},
-    "loggers": {"licenses": {"handlers": ["console"], "level": "INFO"}},
+    "loggers": {
+        "licenses": {"handlers": ["console"], "level": "INFO"},
+        "axes": {"handlers": ["console"], "level": "ERROR", "propagate": False},
+    },
 }

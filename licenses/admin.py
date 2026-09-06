@@ -1,16 +1,15 @@
 """Admin console (SPEC 3.1.4): Django Admin, restricted to Admin sessions
-(is_staff) by Django itself. Key plaintext is shown once at issue time via a
-flash message and never stored; password hashes are never displayed.
+(is_staff) by Django itself. Key plaintext is shown once at issue time in
+the immediate response and never stored; password hashes are never displayed.
 """
 
 from admin_extra_buttons.api import ExtraButtonsMixin, button
 from django import forms
-from django.contrib import admin, messages
+from django.contrib import admin
 from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth.admin import GroupAdmin as BaseGroupAdmin
 from django.contrib.auth.models import Group, User
 from django.db import transaction
-from django.shortcuts import redirect
 from django.template.response import TemplateResponse
 from django.utils.translation import gettext_lazy as _
 from unfold.admin import ModelAdmin
@@ -20,11 +19,10 @@ from unfold.widgets import (
     UnfoldAdminSplitDateTimeWidget,
 )
 
-from . import services
+from . import audit, services
 from .models import Device, Entitlement, LicenseKey, Product
 
 BATCH_ISSUE_MAX = 50
-_ISSUED_ONCE_SESSION_KEY = "_issued_license_keys_once"
 
 
 class BatchIssueForm(forms.Form):
@@ -47,13 +45,56 @@ class BatchIssueForm(forms.Form):
     )
 
 
+def audit_object(request, obj):
+    fields = {"object_id": obj.pk, "model": obj._meta.label_lower}
+    for model, field in (
+        (Product, "product_id"),
+        (LicenseKey, "key_id"),
+        (Entitlement, "entitlement_id"),
+        (Device, "device_id"),
+    ):
+        if isinstance(obj, model):
+            fields[field] = obj.pk
+    if isinstance(obj, (LicenseKey, Entitlement)):
+        fields["product_id"] = obj.product_id
+    if isinstance(obj, Device):
+        fields.update(entitlement_id=obj.entitlement_id, product_id=obj.entitlement.product_id)
+    audit.resources(request, **fields)
+
+
+class AuditedAdmin(ModelAdmin):
+    def log_addition(self, request, obj, message):
+        audit_object(request, obj)
+        return super().log_addition(request, obj, message)
+
+    def log_change(self, request, obj, message):
+        audit_object(request, obj)
+        return super().log_change(request, obj, message)
+
+    def log_deletions(self, request, queryset):
+        audit.resources(
+            request,
+            object_ids=list(queryset.values_list("pk", flat=True)),
+            model=self.model._meta.label_lower,
+        )
+        return super().log_deletions(request, queryset)
+
+
+def issued_response(request, context, keys):
+    response = TemplateResponse(
+        request, "admin/licenses/licensekey/issue_batch.html", {**context, "issued": keys}
+    )
+    response["Cache-Control"] = "no-store, private"
+    return response
+
+
 @admin.register(Product)
-class ProductAdmin(ModelAdmin):
+class ProductAdmin(AuditedAdmin):
     list_display = ("code", "name", "created_at")
 
 
 @admin.register(LicenseKey)
-class LicenseKeyAdmin(ExtraButtonsMixin, ModelAdmin):
+class LicenseKeyAdmin(ExtraButtonsMixin, AuditedAdmin):
     list_display = (
         "key_prefix",
         "product",
@@ -72,10 +113,16 @@ class LicenseKeyAdmin(ExtraButtonsMixin, ModelAdmin):
     def save_model(self, request, obj, form, change):
         key, plaintext = services.issue_key(obj.product, obj.max_devices, obj.expires_at)
         obj.pk = key.pk
-        messages.success(request, f"License key issued (shown once, then only the hash is kept): {plaintext}")
+        request._issued_license_key = plaintext
+        audit.resources(request, product_id=key.product_id, key_id=key.pk)
+
+    def response_add(self, request, obj, post_url_continue=None):
+        context = self.get_common_context(request, title=_("Issue batch"))
+        return issued_response(request, context, [request._issued_license_key])
 
     @admin.action(description="Revoke selected license keys")
     def revoke_keys(self, request, queryset):
+        audit.resources(request, key_ids=list(queryset.values_list("pk", flat=True)))
         for key in queryset:
             services.revoke_key(key)
 
@@ -88,11 +135,6 @@ class LicenseKeyAdmin(ExtraButtonsMixin, ModelAdmin):
     )
     def issue_batch(self, request):
         context = self.get_common_context(request, title=_("Issue batch"))
-        issued = request.session.pop(_ISSUED_ONCE_SESSION_KEY, None)
-        if issued is not None:
-            context["issued"] = issued
-            return TemplateResponse(request, "admin/licenses/licensekey/issue_batch.html", context)
-
         form = BatchIssueForm(request.POST or None)
         if request.method == "POST" and form.is_valid():
             product = form.cleaned_data["product"]
@@ -104,15 +146,15 @@ class LicenseKeyAdmin(ExtraButtonsMixin, ModelAdmin):
                 for _n in range(count):
                     _key, plaintext = services.issue_key(product, max_devices, expires_at)
                     keys.append(plaintext)
-            request.session[_ISSUED_ONCE_SESSION_KEY] = keys
-            return redirect("admin:licenses_licensekey_issue_batch")
+            audit.resources(request, product_id=product.pk, count=count)
+            return issued_response(request, context, keys)
 
         context["form"] = form
         return TemplateResponse(request, "admin/licenses/licensekey/issue_batch.html", context)
 
 
 @admin.register(Entitlement)
-class EntitlementAdmin(ModelAdmin):
+class EntitlementAdmin(AuditedAdmin):
     list_display = ("account", "product", "status", "max_devices", "expires_at", "created_at")
     fields = ("account", "product", "status", "max_devices", "expires_at", "source_key", "created_at")
     readonly_fields = ("account", "product", "max_devices", "expires_at", "source_key", "created_at")
@@ -123,7 +165,7 @@ class EntitlementAdmin(ModelAdmin):
 
 
 @admin.register(Device)
-class DeviceAdmin(ModelAdmin):
+class DeviceAdmin(AuditedAdmin):
     list_display = ("device_fingerprint", "entitlement", "status", "display_name", "bound_at")
     actions = ("unbind_devices",)
 
@@ -135,6 +177,7 @@ class DeviceAdmin(ModelAdmin):
 
     @admin.action(description="Unbind selected devices")
     def unbind_devices(self, request, queryset):
+        audit.resources(request, device_ids=list(queryset.values_list("pk", flat=True)))
         for device in queryset:
             services.unbind(device)
 
@@ -144,7 +187,7 @@ admin.site.unregister(Group)
 
 
 @admin.register(User)
-class AccountAdmin(ModelAdmin):
+class AccountAdmin(AuditedAdmin):
     """One Account type (4.1.1). Password hashes are never rendered."""
 
     list_display = ("username", "is_staff", "is_active", "date_joined")
@@ -152,5 +195,5 @@ class AccountAdmin(ModelAdmin):
 
 
 @admin.register(Group)
-class UnfoldGroupAdmin(BaseGroupAdmin, ModelAdmin):
+class UnfoldGroupAdmin(BaseGroupAdmin, AuditedAdmin):
     pass

@@ -9,6 +9,8 @@ document — all served by one process.
 
 ```bash
 uv sync
+docker compose up -d redis                     # shared security counters
+export LICENSE_DEBUG=1                         # explicit local development profile
 uv run python manage.py migrate
 uv run python manage.py createsuperuser        # bootstrap: the only way to create an Admin (6.4)
 just serve                                     # migrate + Tailwind watcher + runserver (127.0.0.1:8000)
@@ -28,22 +30,29 @@ Then open:
 
 ## Configuration (SPEC Section 6)
 
-All configuration is environment variables; changing any `store` field requires a restart.
+Deployment needs only a production secret and allowed hosts when using the local
+SQLite and Redis defaults. Restart after changing environment variables.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `LICENSE_LISTEN_HOST` / `LICENSE_LISTEN_PORT` | `127.0.0.1` / `8000` | bind address (passed to `runserver`) |
-| `LICENSE_STORE_ENGINE` | `sqlite3` | `sqlite3` or `postgresql` |
-| `LICENSE_STORE_NAME` | `./license_store.sqlite3` | sqlite file path, or database name |
-| `LICENSE_STORE_USER` / `_PASSWORD` / `_HOST` / `_PORT` | — | postgresql only |
-| `LICENSE_SESSION_SECRET` | dev default | **required** when `LICENSE_DEBUG=0` (no production default) |
-| `LICENSE_DEBUG` | `1` | set `0` for production |
-| `LICENSE_ALLOWED_HOSTS` | `*` | comma-separated |
+| `LICENSE_SESSION_SECRET` | required in production | session signing secret |
+| `LICENSE_ALLOWED_HOSTS` | `localhost,127.0.0.1,[::1]` | comma-separated hostnames |
+| `LICENSE_DATABASE_URL` | `sqlite:///<project>/license_store.sqlite3` | SQLite or PostgreSQL connection URL, parsed by dj-database-url |
+| `LICENSE_REDIS_URL` | `redis://127.0.0.1:6379/0` | shared Redis |
+| `LICENSE_DEBUG` | `0` | `just serve` enables local development on `127.0.0.1:8000` |
+| `LICENSE_TRUST_PROXY` | `0` | enable only when the edge strips/replaces `X-Forwarded-Proto` and blocks direct upstream access |
 
-Preflight (6.4): `manage.py check` (also run by `runserver`) fails startup with
-`config_invalid` when the production secret is missing (`licenses.E001`) and with
-`store_unavailable` when the store engine cannot be opened (`licenses.E002`).
-Unknown engines raise `ImproperlyConfigured("config_invalid: ...")` at settings import.
+Registration limits are fixed at 5 attempts per peer/hour and 100 globally/hour.
+Public registration stops at 10,000 accounts; device history retains 100 rows per
+entitlement, or its seat limit if larger. All cache users share Redis with the
+`license-service` prefix; separate deployments should use separate Redis databases.
+
+`LICENSE_DATABASE_URL` replaces the previous `LICENSE_STORE_*` variables; for
+PostgreSQL, use `postgresql://user:password@host:5432/licenses` and install
+`psycopg[binary]`. Binding is controlled by the application server's own arguments.
+
+Startup rejects a missing production secret (`licenses.E001`). `manage.py check`
+also rejects an unreachable database (`licenses.E002`).
 
 ## Implementation-defined profile (SPEC Section 11)
 
@@ -55,15 +64,17 @@ Unknown engines raise `ImproperlyConfigured("config_invalid: ...")` at settings 
   (durable across restarts), cookie name `sessionid`, HttpOnly.
 - **Store engines**: SQLite (default) and PostgreSQL, via the Django ORM. Core
   Conformance runs on SQLite; PostgreSQL is supported through the same ORM layer
-  (run the suite with `LICENSE_STORE_ENGINE=postgresql` for the Real Integration
+  (run the suite with `LICENSE_DATABASE_URL=postgresql://…` for the Real Integration
   Profile).
 - **Admin UI generator**: Django Admin (`licenses/admin.py`).
 - **UI language**: Django gettext, `en` and `zh-hans`. `LocaleMiddleware` picks
   the language from `Accept-Language`; there is no in-page switcher. Machine
   `error` class names stay English.
 - **Logging library**: Python `logging`, logger `licenses.api`, console handler.
-  Every mutating or validate call logs one record with `op`, `actor`, `account`,
-  `product`, `entitlement`, `device`, `outcome`, and a request correlation id (`rid`).
+  Every JSON mutation/validation and HTML/Admin mutation logs a JSON record with
+  `op`, `actor`, `outcome`, a request correlation id (`rid`), and known resource IDs
+  (`account_id`, `product_id`, `entitlement_id`, `device_id`, or Admin object IDs).
+  Client request IDs must match `[A-Za-z0-9_-]{1,64}`; other values are replaced.
   Logging never contains key plaintext, `key_hash`, passwords, session secrets, or raw
   fingerprints (Python logging handler failures never fail the request).
 - **License Key generation**: `lic_` + 32 characters from a 29-symbol alphabet
@@ -71,7 +82,8 @@ Unknown engines raise `ImproperlyConfigured("config_invalid: ...")` at settings 
   ~155 bits of entropy. Only the SHA-256 hex digest and the first 12 characters
   (`key_prefix`) persist; plaintext is returned once in the issuing response.
 - **Username**: trimmed, 1–150 chars, any charset, unique case-insensitively (ASCII
-  case-insensitive on SQLite via `__iexact`).
+  case-insensitive on SQLite via database `LOWER`). A unique index enforces this
+  across all writers; concurrent duplicate registration returns 409.
 - **Product `code`**: trimmed, non-empty, unique case-insensitively.
 - **`device_fingerprint`**: trimmed, must be non-empty, max 128 chars, case-sensitive,
   never HTML-decoded or rewritten. Generated by the Licensed Application; the service
@@ -84,13 +96,49 @@ Unknown engines raise `ImproperlyConfigured("config_invalid: ...")` at settings 
 - **Concurrency (Invariant 3)**: the seat check and insert run in one transaction.
   PostgreSQL serializes concurrent binds with `SELECT ... FOR UPDATE` on the
   Entitlement row; SQLite serializes writers at the database level and a busy write
-  retries the whole check-and-insert (bounded, 5 attempts).
+  retries the whole check-and-insert (bounded, 10 attempts). The current entitlement
+  status/expiry is checked under the lock. Anonymous activation also locks and
+  rechecks the key, in key-then-entitlement order.
 - **CSRF policy**: the JSON API is `csrf_exempt` but every write requires
-  `Content-Type: application/json` (not form-encodable by a browser); the HTML pages
-  use Django CSRF tokens.
-- **Rate limiting / login lockout** (Section 15, RECOMMENDED): not implemented.
-- **HTTPS**: terminate at a reverse proxy in production; set `LICENSE_DEBUG=0`,
-  `LICENSE_SESSION_SECRET`, `LICENSE_ALLOWED_HOSTS`.
+  `Content-Type: application/json`, including empty writes (send `{}`). Session
+  writes and login/registration reject a supplied Origin unless it exactly matches
+  the request origin. HTML/Admin forms use Django CSRF tokens.
+- **Login abuse controls**: `django-axes` protects JSON, Customer UI and Django
+  Admin through Django's authentication backend/signals and Axes middleware.
+  `AXES_LOCKOUT_PARAMETERS = ["username", "ip_address"]` checks the account and
+  source independently, using shared Redis counters via `django-redis`. Five
+  failures lock further logins; entries expire 15 minutes after the last counted
+  failure. Attempts during lockout do not extend it, and successful logins do not
+  reset counters (including other failures from that source). Existing sessions
+  survive a lockout. Inactive accounts never authenticate; activation changes
+  invalidate stored sessions. Project code only normalizes account names and
+  preserves the adapters' generic invalid-credentials response.
+- **Registration abuse controls**: `django-ratelimit` decorators enforce shared
+  source/global hourly limits before password hashing. HTML uses the package's
+  middleware for the 429 response; JSON preserves its audited error envelope.
+  `django-redis` supplies a registration lock for serializing account creation and
+  checking the total account capacity. Counter updates, expiry and locking are
+  library-owned. Both packages use `REMOTE_ADDR`, ignoring forwarded client-IP
+  headers; configure the trusted edge accordingly.
+- **Redis**: all workers must use the same Redis and cache namespace. The supplied
+  Compose service enables AOF and disables eviction. Redis is a required service;
+  failures do not bypass the limits (JSON login/registration returns 503). Deleting
+  its data resets the counters. Tests use a random key prefix and clean only that
+  prefix, never the whole database.
+- **Device storage**: display names are at most 200 characters, enforced by shared
+  services and the database. A new binding prunes the oldest unbound rows when the
+  per-entitlement history budget is full; bound rows are retained.
+- **Request bounds**: bodies are limited to 16 KiB; registration passwords to 1,024
+  characters. Invalid Unicode, null characters, nested JSON values, and expected
+  parser/database errors return sanitized errors.
+- **HTTPS**: production defaults to HTTPS redirects, Secure session/CSRF cookies,
+  and one-year HSTS. Set `LICENSE_SESSION_SECRET` and `LICENSE_ALLOWED_HOSTS`;
+  terminate TLS at your edge. Only enable `LICENSE_TRUST_PROXY=1` when that edge
+  strips and replaces the scheme header and prevents direct upstream access.
+  Development uses `just serve`, which binds to loopback and enables `LICENSE_DEBUG=1`.
+- **One-time key delivery**: Admin single/batch issuance renders plaintext directly
+  in the POST response with `Cache-Control: no-store`; no session, message cookie,
+  or redirect handoff contains the key. JSON issuance is also non-cacheable.
 
 ## Error contract (SPEC 5.3 / 14)
 
@@ -98,8 +146,26 @@ Every failed machine call returns `{"error": <class>, "message": <str>}` with th
 normative HTTP mapping: 400 `validation_error`; 401 `unauthenticated`; 403
 `forbidden`; 404 `not_found`/`unknown_key`/`unknown_device`; 409 `conflict`,
 `already_entitled`, `key_already_redeemed`, `key_revoked`, `seat_exhausted`,
-`entitlement_suspended`, `entitlement_revoked`, `entitlement_expired`; 503
+`entitlement_suspended`, `entitlement_revoked`, `entitlement_expired`; 429
+`rate_limited`; 503
 `store_unavailable`. `config_invalid` is startup-only.
+
+
+## Security upgrade
+
+Apply migrations before starting the updated service. Migration `0003` clears all
+existing sessions, including old key-delivery sessions; everyone must log in again.
+It refuses to proceed if case-insensitive duplicate usernames exist, so the operator
+must resolve their ownership before retrying. The device-name constraint likewise
+requires existing names to fit the 200-character limit; names are never silently
+truncated. Past backups may still contain plaintext issued by the old version and
+must be retired according to the operator's backup policy.
+
+The change also switches production defaults to HTTPS and a required secret. Set
+production environment variables before `migrate` or importing WSGI. For local use,
+follow the explicit development profile in Quickstart.
+
+See [the finding-by-finding repair and validation record](docs/security-scan-2026-09-06.md).
 
 ## Code layout and audit budget
 
@@ -107,36 +173,44 @@ Code is formatted with `ruff format` and linted with `ruff check` (see `ruff.tom
 line-length 110). Line counts below are **code lines measured by `scc`** (comments and
 blank lines excluded).
 
-The auditable core — entities and invariants (`models.py`), the Section 7 state
+The domain core — entities and invariants (`models.py`), the Section 7 state
 machines (`services.py`), and the HTTP contract with validation, authorization, and
-audit logging (`api.py`) — is **488 code lines**, within the 500-line budget.
-Everything else is thin presentation derived from the same registry/services.
+audit logging (`api.py`) — is **583 code lines**. The expanded security controls
+exceed the original 500-line core target. Library adapters for login/registration
+limits, audit emission and session invalidation live in dedicated modules; presentation uses the shared
+registry/services.
 
 | File | Code lines (scc) | Layer |
 | --- | --- | --- |
-| `licenses/models.py` | 50 | Persistence (entities, uniqueness invariants) |
-| `licenses/services.py` | 141 | Policy (redeem/bind/unbind/validate, seats) |
-| `licenses/api.py` | 297 | Coordination (25 ops, validation, authz, logging) |
-| **core subtotal** | **488** | |
-| `licenses/openapi.py` | 95 | Presentation (OpenAPI from the registry) |
-| `licenses/views_ui.py` | 98 | Presentation (Customer HTML pages) |
-| `licenses/admin.py` | 89 | Presentation (Admin console config) |
-| `licenses/apps.py` | 26 | Startup preflight checks |
-| `config/`, `manage.py` | 118 | Standard Django project scaffolding |
+| `licenses/models.py` | 57 | Persistence (entities and uniqueness invariants) |
+| `licenses/services.py` | 191 | Policy (authentication/redeem/bind/unbind/validate, seats) |
+| `licenses/api.py` | 335 | Coordination (25 ops, validation, authz, logging) |
+| **domain core subtotal** | **583** | |
+| `licenses/auth.py` | 20 | Account-name and lockout-response adapters |
+| `licenses/registration.py` | 15 | django-ratelimit rules and HTML response |
+| `licenses/audit.py` | 59 | Shared audit emission |
+| `licenses/signals.py` | 14 | Session invalidation |
+| **core and security modules subtotal** | **691** | |
+| `licenses/openapi.py` | 64 | Presentation (OpenAPI from the registry) |
+| `licenses/views_ui.py` | 118 | Presentation (Customer HTML pages) |
+| `licenses/admin.py` | 155 | Presentation (Admin console config) |
+| `licenses/apps.py` | 16 | Startup preflight checks |
+| `config/`, `manage.py` | 189 | Standard Django project scaffolding |
 | `licenses/templates/` | — | HTML (Django templates + Tailwind) |
 | `src/styles.css` | — | Tailwind source (compiled to `assets/css/tailwind.css`) |
-| `licenses/tests/` | 815 | pytest suite (not counted as core) |
+| `licenses/tests/` | 1318 | pytest suite (not counted as core) |
 
 Reproduce: `scc --no-cocomo --no-size licenses/models.py licenses/services.py licenses/api.py`
 
 ## Tests
 
 ```bash
-uv run pytest                 # 80 tests
+docker compose up -d redis
+uv run pytest                 # SQLite + real Redis; explicit test profile
 uv run ruff format --check . && uv run ruff check .   # style and lint gates
 ```
 
-80 tests, organized by SPEC Section 17:
+The suite extends the original 80 conformance tests with security regressions:
 
 - `test_parsing.py` — 17.2: unknown/missing/typed fields, envelope shape, status
   mapping, session requirements, empty-list behavior.

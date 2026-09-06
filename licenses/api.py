@@ -9,7 +9,8 @@ from django.contrib.auth.forms import AuthenticationForm
 from django.contrib.auth.models import User
 from django.core.exceptions import RequestDataTooBig
 from django.db import DataError, IntegrityError, OperationalError
-from django.http import JsonResponse
+from django.http import Http404, JsonResponse
+from django.shortcuts import get_object_or_404
 from django.urls import path
 from django.utils.dateparse import parse_datetime
 from django.views.decorators.csrf import csrf_exempt
@@ -180,6 +181,7 @@ def dispatch(request, op_path, **path_params):
         return response
     except (
         Failure,
+        Http404,
         OperationalError,
         IntegrityError,
         DataError,
@@ -190,6 +192,8 @@ def dispatch(request, op_path, **path_params):
     ) as exc:
         if isinstance(exc, Ratelimited):
             error, message = "rate_limited", "Registration limit reached. Please try again later."
+        elif isinstance(exc, Http404):
+            error, message = "not_found", "Not found."
         elif isinstance(exc, Failure):
             error, message = exc.error, exc.message
         elif isinstance(exc, (OperationalError, RedisError)):
@@ -208,25 +212,6 @@ def _audit(op_name, ctx):
     audit.emit(op_name, ctx)
 
 
-def _get(model, pk):
-    obj = model.objects.filter(pk=pk).first()
-    if obj is None:
-        raise Failure("not_found", f"Unknown {model.__name__.lower()} id.")
-    return obj
-
-
-def _mine(model, pk, user):
-    """Invariant 6: foreign rows answer not_found and never leak existence."""
-    obj = model.objects.filter(pk=pk).first()
-    if (
-        obj is None
-        or (hasattr(obj, "account_id") and obj.account_id != user.pk)
-        or (hasattr(obj, "entitlement") and obj.entitlement.account_id != user.pk)
-    ):
-        raise Failure("not_found", "Not found.")
-    return obj
-
-
 def _list_op(name, op_path, auth, collection, model, serializer):
     op(name, "GET", op_path, auth)(
         lambda request, data, ctx: ({collection: [serializer(x) for x in model.objects.order_by("pk")]}, 200)
@@ -234,7 +219,9 @@ def _list_op(name, op_path, auth, collection, model, serializer):
 
 
 def _get_op(name, op_path, auth, key, model, serializer):
-    op(name, "GET", op_path, auth)(lambda request, data, ctx, pk: ({key: serializer(_get(model, pk))}, 200))
+    op(name, "GET", op_path, auth)(
+        lambda request, data, ctx, pk: ({key: serializer(get_object_or_404(model, pk=pk))}, 200)
+    )
 
 
 @op("register", "POST", "auth/register", "anonymous", (("username", "str", True), ("password", "str", True)))
@@ -275,7 +262,7 @@ def create_product(request, data, ctx):
 
 @op("update_product", "PATCH", "products/{pk}", "admin", (("name", "str", False),))  # code never changes
 def update_product(request, data, ctx, pk):
-    product = _get(Product, pk)
+    product = get_object_or_404(Product, pk=pk)
     if "name" in data:
         product.name = data["name"]
         product.save(update_fields=("name",))
@@ -291,7 +278,7 @@ def update_product(request, data, ctx, pk):
     (("product_id", "int", True), ("max_devices", "int", True), ("expires_at", "dt?", False)),
 )
 def issue_license_key(request, data, ctx):
-    product = _get(Product, data["product_id"])
+    product = get_object_or_404(Product, pk=data["product_id"])
     key, plaintext = services.issue_key(product, data["max_devices"], data.get("expires_at"))
     ctx["product_id"] = product.pk
     return {"key": key_json(key), "license_key": plaintext}, 201  # plaintext returned once, here only
@@ -299,14 +286,14 @@ def issue_license_key(request, data, ctx):
 
 @op("revoke_license_key", "POST", "license-keys/{pk}/revoke", "admin")
 def revoke_license_key(request, data, ctx, pk):
-    key = services.revoke_key(_get(LicenseKey, pk))
+    key = services.revoke_key(get_object_or_404(LicenseKey, pk=pk))
     ctx["product_id"] = key.product_id
     return {"key": key_json(key)}, 200
 
 
 @op("set_entitlement_status", "POST", "entitlements/{pk}/status", "admin", (("status", "str", True),))
 def set_entitlement_status(request, data, ctx, pk):  # max_devices/expires_at are unknown fields (Invariant 7)
-    entitlement = _get(Entitlement, pk)
+    entitlement = get_object_or_404(Entitlement, pk=pk)
     if data["status"] not in ("active", "suspended", "revoked"):
         raise Failure("validation_error", "status must be active, suspended, or revoked.")
     entitlement.status = data["status"]
@@ -317,7 +304,7 @@ def set_entitlement_status(request, data, ctx, pk):  # max_devices/expires_at ar
 
 @op("unbind_device", "POST", "devices/{pk}/unbind", "admin")
 def unbind_device(request, data, ctx, pk):
-    device = services.unbind(_get(Device, pk))
+    device = services.unbind(get_object_or_404(Device, pk=pk))
     ctx.update(entitlement_id=device.entitlement_id, device_id=device.pk)
     return {"device": device_json(device)}, 200
 
@@ -345,12 +332,12 @@ def list_my_entitlements(request, data, ctx):
 
 @op("get_my_entitlement", "GET", "me/entitlements/{pk}", "session")
 def get_my_entitlement(request, data, ctx, pk):
-    return {"entitlement": entitlement_json(_mine(Entitlement, pk, request.user))}, 200
+    return {"entitlement": entitlement_json(get_object_or_404(Entitlement, pk=pk, account=request.user))}, 200
 
 
 @op("list_my_devices", "GET", "me/entitlements/{pk}/devices", "session")
 def list_my_devices(request, data, ctx, pk):
-    entitlement = _mine(Entitlement, pk, request.user)
+    entitlement = get_object_or_404(Entitlement, pk=pk, account=request.user)
     return {"devices": [device_json(d) for d in entitlement.devices.order_by("pk")]}, 200
 
 
@@ -362,7 +349,7 @@ def list_my_devices(request, data, ctx, pk):
     (("device_fingerprint", "str", True), ("display_name", "str?", False)),
 )
 def bind_my_device(request, data, ctx, pk):
-    entitlement = _mine(Entitlement, pk, request.user)
+    entitlement = get_object_or_404(Entitlement, pk=pk, account=request.user)
     device, created = services.bind(entitlement, data["device_fingerprint"], data.get("display_name"))
     ctx.update(product_id=entitlement.product_id, entitlement_id=entitlement.pk, device_id=device.pk)
     return {"device": device_json(device)}, 201 if created else 200
@@ -370,14 +357,14 @@ def bind_my_device(request, data, ctx, pk):
 
 @op("unbind_my_device", "POST", "me/devices/{pk}/unbind", "session")
 def unbind_my_device(request, data, ctx, pk):
-    device = services.unbind(_mine(Device, pk, request.user))
+    device = services.unbind(get_object_or_404(Device, pk=pk, entitlement__account=request.user))
     ctx.update(entitlement_id=device.entitlement_id, device_id=device.pk)
     return {"device": device_json(device)}, 200
 
 
 @op("set_my_device_display_name", "PATCH", "me/devices/{pk}", "session", (("display_name", "str?", True),))
 def set_my_device_display_name(request, data, ctx, pk):
-    device = _mine(Device, pk, request.user)
+    device = get_object_or_404(Device, pk=pk, entitlement__account=request.user)
     services.rename_device(device, data["display_name"])
     ctx.update(entitlement_id=device.entitlement_id, device_id=device.pk)
     return {"device": device_json(device)}, 200

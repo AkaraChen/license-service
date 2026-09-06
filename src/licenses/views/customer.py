@@ -51,10 +51,7 @@ def register_page(request):
             login(request, user, backend="django.contrib.auth.backends.ModelBackend")
             return redirect("ui_home")
     return TemplateResponse(
-        request,
-        "licenses/register.html",
-        {"form": form},
-        status=400 if form.errors else 200,
+        request, "licenses/register.html", {"form": form}, status=400 if form.errors else 200
     )
 
 
@@ -83,9 +80,7 @@ def redeem_page(request):
             log.warning("redeem", extra={"outcome": exc.code})
             form.add_error(None, exc.message)
         else:
-            log.info(
-                "redeem", extra={"entitlement_id": entitlement.pk, "product_id": entitlement.product_id}
-            )
+            log.info("redeem", extra={"entitlement_id": entitlement.pk, "product_id": entitlement.product_id})
             return redirect("ui_home")
     return TemplateResponse(
         request, "licenses/redeem.html", {"form": form}, status=400 if form.errors else 200
@@ -121,17 +116,13 @@ def rename_page(request, device_id):
     form = DeviceNameForm(request.POST)
     if not form.is_valid():
         log.warning("rename", extra={"outcome": "validation_error"})
-        return _entitlement_response(
-            request, device.entitlement, rename_forms={device.pk: form}, status=400
-        )
+        return _entitlement_response(request, device.entitlement, rename_forms={device.pk: form}, status=400)
     try:
         services.rename_device(device, **form.cleaned_data)
     except Failure as exc:
         log.warning("rename", extra={"outcome": exc.code})
         form.add_error(None, exc.message)
-        return _entitlement_response(
-            request, device.entitlement, rename_forms={device.pk: form}, status=400
-        )
+        return _entitlement_response(request, device.entitlement, rename_forms={device.pk: form}, status=400)
     log.info(
         "rename", extra={"entitlement_id": device.entitlement_id, "product_id": device.entitlement.product_id}
     )

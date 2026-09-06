@@ -92,7 +92,7 @@ def test_unbind_failure_stays_on_entitlement_page(db, customer, redeemed, monkey
     )
 
     def refuse(bound):
-        raise Failure("conflict", "Cannot unbind this device.")
+        raise Failure("Cannot unbind this device.")
 
     monkeypatch.setattr(services, "unbind", refuse)
     response = browser.post(f"/ui/devices/{device.pk}/unbind")

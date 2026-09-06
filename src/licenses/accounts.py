@@ -12,7 +12,7 @@ from django.shortcuts import render
 from django.utils.translation import gettext
 from django_ratelimit.decorators import ratelimit
 
-from .services import Failure
+from .services.errors import conflict, rate_limited
 
 log = logging.getLogger(__name__)
 
@@ -26,9 +26,9 @@ def register_account(username, password, request=None):
 
     def work():
         if User.objects.count() >= MAX_ACCOUNTS:
-            raise Failure("rate_limited", "Account capacity reached. Contact the operator.")
+            raise rate_limited("Account capacity reached. Contact the operator.")
         if User.objects.alias(canonical=Lower("username")).filter(canonical=Lower(Value(username))).exists():
-            raise Failure("conflict", gettext("This username is already taken."))
+            raise conflict(gettext("This username is already taken."))
         return User.objects.create_user(username=username, password=password)
 
     try:
@@ -36,7 +36,7 @@ def register_account(username, password, request=None):
             with transaction.atomic():
                 return work()
     except IntegrityError:
-        raise Failure("conflict", gettext("This username is already taken.")) from None
+        raise conflict(gettext("This username is already taken.")) from None
 
 
 def drop_account_sessions(account):

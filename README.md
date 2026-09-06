@@ -175,9 +175,11 @@ The Django app lives in `src/licenses` with MTV in three packages: `models/`,
 `templates/`, and `views/` (`customer.py` HTML, `api.py` JSON). The Admin console
 stays in `src/licenses/admin.py`.
 Django Ninja routers in `src/licenses/views/api.py` declare the 25 machine operations.
-Pydantic request schemas live in `src/licenses/views/schemas.py`; `views/http.py`
-retains the license-specific error contract and staff flag. Views log mutations
-with the stdlib logger; `JsonWritePolicyMiddleware` keeps the JSON
+Pydantic request schemas live in `src/licenses/views/schemas.py`. SPEC error
+classes are raiseable types in `src/licenses/services/errors.py`; one Ninja
+handler in `views/api.py` serializes `{"error","message"}` from `exc.code` and
+`exc.status`. Views log mutations with the stdlib logger; `JsonWritePolicyMiddleware`
+keeps the JSON
 same-origin + Content-Type write policy and the `/api/` 405 envelope. Ninja
 generates `/openapi.json` and `/docs`. There is no operation registry, custom JSON
 type parser or OpenAPI builder.
@@ -191,7 +193,7 @@ and errors. Rate-limit and session-invalidation adapters remain in `accounts.py`
 For an honest audit budget include the schemas and HTTP adapter:
 
 ```bash
-scc --no-cocomo --no-size src/licenses/views/api.py src/licenses/views/http.py src/licenses/views/schemas.py
+scc --no-cocomo --no-size src/licenses/views/api.py src/licenses/views/schemas.py src/licenses/services/errors.py
 ```
 
 ## Tests

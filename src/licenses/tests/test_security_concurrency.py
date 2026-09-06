@@ -69,7 +69,7 @@ def test_bind_waits_for_revocation_commit(redeemed, target):
             try:
                 services.bind(entitlement, "racing-machine", source_key_id=entitlement.source_key_id)
             except services.Failure as exc:
-                return exc.error
+                return exc.code
             return "unexpected success"
         finally:
             close_old_connections()

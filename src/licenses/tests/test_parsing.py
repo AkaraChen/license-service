@@ -5,7 +5,6 @@ import json
 from django.contrib.auth.models import User
 
 from licenses.models import Device
-from licenses.views.http import HTTP_STATUS
 
 from .conftest import error_class
 
@@ -77,9 +76,9 @@ def test_error_envelope_shape_and_status_mapping(api, admin_api, product):
     response = api.post("auth/login", {"username": "ghost", "password": "nope"})
     body = json.loads(response.content)
     assert set(body) == {"error", "message"}
-    assert body["error"] in HTTP_STATUS
+    assert body["error"] == "unauthenticated"
     assert isinstance(body["message"], str) and body["message"]
-    assert response.status_code == HTTP_STATUS[body["error"]] == 401
+    assert response.status_code == 401
 
     response = admin_api.get("products/9999")
     assert response.status_code == 404

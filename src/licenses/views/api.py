@@ -6,19 +6,85 @@ from django.contrib.auth import login as auth_login
 from django.contrib.auth import logout as auth_logout
 from django.contrib.auth.forms import AuthenticationForm
 from django.contrib.auth.models import User
-from django.db import transaction
+from django.core.exceptions import RequestDataTooBig
+from django.db import DataError, IntegrityError, OperationalError, transaction
+from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.views.decorators.cache import never_cache
-from ninja import Router, Status
+from django_ratelimit.exceptions import Ratelimited
+from ninja import NinjaAPI, Router, Status
 from ninja.decorators import decorate_view
+from ninja.errors import AuthenticationError, HttpError, ValidationError
+from ninja.security import SessionAuth
+from redis.exceptions import RedisError
 
 from .. import accounts, services
 from ..models import Device, Entitlement, LicenseKey, Product
-from ..services import Failure
+from ..services import errors
+from ..services.errors import Failure
 from . import schemas as s
-from .http import admin_session, api, customer_session
+
+
+class LicenseAPI(NinjaAPI):
+    def get_openapi_operation_id(self, operation):
+        return operation.view_func.__name__
+
+
+api = LicenseAPI(title="License Service", version="3.0.0", openapi_url="/openapi.json", docs_url="/docs")
+
+
+class AdminSession(SessionAuth):
+    def authenticate(self, request, key):
+        user = super().authenticate(request, key)
+        if user is not None and not user.is_staff:
+            raise errors.forbidden("Admin privileges required.")
+        return user
+
+
+customer_session = SessionAuth(csrf=False)
+admin_session = AdminSession(csrf=False)
+
+
+def _as_failure(exc):
+    if isinstance(exc, Failure):
+        return exc
+    if isinstance(exc, AuthenticationError):
+        return errors.unauthenticated("A session cookie is required.")
+    if isinstance(exc, Http404):
+        return errors.not_found("Not found.")
+    if isinstance(exc, (OperationalError, RedisError)):
+        return errors.store_unavailable("The license store is unavailable.")
+    if isinstance(exc, IntegrityError):
+        return errors.conflict("The requested change conflicts with existing data.")
+    if isinstance(exc, Ratelimited):
+        return errors.rate_limited("Registration limit reached. Please try again later.")
+    return errors.validation_error("The request body is invalid or too large.")
+
 
 log = logging.getLogger(__name__)
+
+
+def handle_error(request, exc):
+    err = _as_failure(exc)
+    log.warning("api_error", extra={"outcome": err.code})
+    return JsonResponse({"error": err.code, "message": err.message}, status=err.status)
+
+
+for exception in (
+    Failure,
+    Http404,
+    OperationalError,
+    RedisError,
+    IntegrityError,
+    Ratelimited,
+    DataError,
+    RequestDataTooBig,
+    UnicodeError,
+    ValidationError,
+    HttpError,
+    AuthenticationError,
+):
+    api.add_exception_handler(exception, handle_error)
 
 admin = Router(auth=admin_session)
 customer = Router(auth=customer_session)
@@ -36,7 +102,7 @@ def register(request, data: s.Credentials):
 def login(request, data: s.Credentials):
     form = AuthenticationForm(request, data=data.model_dump())
     if not form.is_valid():
-        raise Failure("unauthenticated", "Invalid username or password.")
+        raise errors.unauthenticated("Invalid username or password.")
     user = form.get_user()
     auth_login(request, user)
     log.info("login", extra={"account_id": user.pk})
@@ -53,7 +119,7 @@ def logout(request, data: s.Empty = s.Empty()):
 def create_product(request, data: s.ProductCreate):
     code = data.code.strip()
     if not code:
-        raise Failure("validation_error", "code must not be empty.")
+        raise errors.validation_error("code must not be empty.")
     with transaction.atomic():
         product = Product.objects.create(code=code, name=data.name)
     log.info("create_product", extra={"product_id": product.pk})

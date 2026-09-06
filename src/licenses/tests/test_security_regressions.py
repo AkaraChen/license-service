@@ -155,7 +155,7 @@ def test_bind_rechecks_status_after_resolution(db, redeemed, status):
     Entitlement.objects.filter(pk=stale_entitlement.pk).update(status=status)
     with pytest.raises(services.Failure) as rejected:
         services.bind(stale_entitlement, "machine")
-    assert rejected.value.error == f"entitlement_{status}"
+    assert rejected.value.code == f"entitlement_{status}"
     assert not Device.objects.exists()
 
 

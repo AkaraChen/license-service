@@ -3,7 +3,7 @@ from django.utils import timezone
 from django.utils.translation import gettext
 
 from ..models import Entitlement, LicenseKey
-from .errors import Failure
+from . import errors
 from .keys import hash_key
 
 DEVICE_HISTORY_LIMIT = 100
@@ -12,11 +12,11 @@ DEVICE_HISTORY_LIMIT = 100
 def check_active(entitlement):
     """Section 7.5 step 2 / 7.7: status and expiry gate for bind and validate."""
     if entitlement.status == "suspended":
-        raise Failure("entitlement_suspended", gettext("This entitlement is suspended."))
+        raise errors.entitlement_suspended(gettext("This entitlement is suspended."))
     if entitlement.status == "revoked":
-        raise Failure("entitlement_revoked", gettext("This entitlement has been revoked."))
+        raise errors.entitlement_revoked(gettext("This entitlement has been revoked."))
     if entitlement.expires_at is not None and timezone.now() > entitlement.expires_at:
-        raise Failure("entitlement_expired", gettext("This entitlement has expired."))
+        raise errors.entitlement_expired(gettext("This entitlement has expired."))
 
 
 def bind(entitlement, fingerprint, display_name=None, *, source_key_id=None):
@@ -26,18 +26,18 @@ def bind(entitlement, fingerprint, display_name=None, *, source_key_id=None):
         if source_key_id is not None:
             key = LicenseKey.objects.select_for_update().get(pk=source_key_id)
             if key.status == "revoked":
-                raise Failure("key_revoked", gettext("This license key has been revoked."))
+                raise errors.key_revoked(gettext("This license key has been revoked."))
             if key.status != "redeemed":
-                raise Failure("unknown_key", gettext("This license key is not recognized."))
+                raise errors.unknown_key(gettext("This license key is not recognized."))
         locked = Entitlement.objects.select_for_update().get(pk=entitlement.pk)
         if source_key_id is not None and locked.source_key_id != source_key_id:
-            raise Failure("unknown_key", gettext("This license key is not recognized."))
+            raise errors.unknown_key(gettext("This license key is not recognized."))
         check_active(locked)
         existing = locked.devices.filter(device_fingerprint=fingerprint, status="bound").first()
         if existing is not None:
             return existing, False
         if locked.devices.filter(status="bound").count() >= locked.max_devices:
-            raise Failure("seat_exhausted", gettext("This entitlement has no remaining device seats."))
+            raise errors.seat_exhausted(gettext("This entitlement has no remaining device seats."))
         from licenses import services as license_services
 
         budget = max(license_services.DEVICE_HISTORY_LIMIT, locked.max_devices)
@@ -66,12 +66,12 @@ def resolve_redeemed_key(plaintext):
     reports unknown_key so key existence is not leaked before redeem."""
     key = LicenseKey.objects.filter(key_hash=hash_key(plaintext)).first()
     if key is None or key.status == "issued":
-        raise Failure("unknown_key", gettext("This license key is not recognized."))
+        raise errors.unknown_key(gettext("This license key is not recognized."))
     if key.status == "revoked":
-        raise Failure("key_revoked", gettext("This license key has been revoked."))
+        raise errors.key_revoked(gettext("This license key has been revoked."))
     entitlement = getattr(key, "entitlement", None)
     if entitlement is None:
-        raise Failure("unknown_key", gettext("This license key is not recognized."))
+        raise errors.unknown_key(gettext("This license key is not recognized."))
     return key, entitlement
 
 
@@ -81,7 +81,7 @@ def validate(plaintext, fingerprint):
     check_active(entitlement)
     device = entitlement.devices.filter(device_fingerprint=fingerprint, status="bound").first()
     if device is None:
-        raise Failure("unknown_device", gettext("No bound device matches this fingerprint."))
+        raise errors.unknown_device(gettext("No bound device matches this fingerprint."))
     return device
 
 

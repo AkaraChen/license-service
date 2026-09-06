@@ -8,7 +8,8 @@ Django Admin at /admin/ and is never linked or exposed here.
 from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import LoginView
-from django.shortcuts import redirect, render
+from django.http import Http404
+from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.translation import gettext as _
 from django.views.decorators.http import require_GET, require_POST
@@ -41,9 +42,10 @@ def _fail(view):
     def wrapped(request, *args, **kwargs):
         try:
             return view(request, *args, **kwargs)
-        except Failure as exc:
-            audit.resources(request, outcome=exc.error)
-            return render(request, "licenses/error.html", {"error": exc.message}, status=400)
+        except (Failure, Http404) as exc:
+            error = exc.message if isinstance(exc, Failure) else _("Not found.")
+            audit.resources(request, outcome=exc.error if isinstance(exc, Failure) else "not_found")
+            return render(request, "licenses/error.html", {"error": error}, status=400)
 
     return wrapped
 
@@ -94,23 +96,11 @@ def redeem_page(request):
     return render(request, "licenses/redeem.html")
 
 
-def _own(model, pk, user):
-    """Invariant 6 for the pages: foreign rows render the error page."""
-    obj = model.objects.filter(pk=pk).first()
-    if (
-        obj is None
-        or (hasattr(obj, "account_id") and obj.account_id != user.pk)
-        or (hasattr(obj, "entitlement") and obj.entitlement.account_id != user.pk)
-    ):
-        raise Failure("not_found", _("Not found."))
-    return obj
-
-
 @login_required(login_url="ui_login")
 @require_GET
 @_fail
 def entitlement_page(request, entitlement_id):
-    entitlement = _own(Entitlement, entitlement_id, request.user)
+    entitlement = get_object_or_404(Entitlement, pk=entitlement_id, account=request.user)
     bound = entitlement.devices.filter(status="bound").count()
     return render(
         request,
@@ -128,7 +118,7 @@ def entitlement_page(request, entitlement_id):
 @require_POST
 @_fail
 def unbind_page(request, device_id):
-    device = _own(Device, device_id, request.user)
+    device = get_object_or_404(Device, pk=device_id, entitlement__account=request.user)
     services.unbind(device)
     audit.resources(request, entitlement_id=device.entitlement_id, product_id=device.entitlement.product_id)
     return redirect("ui_entitlement", entitlement_id=device.entitlement_id)
@@ -138,7 +128,7 @@ def unbind_page(request, device_id):
 @require_POST
 @_fail
 def rename_page(request, device_id):
-    device = _own(Device, device_id, request.user)
+    device = get_object_or_404(Device, pk=device_id, entitlement__account=request.user)
     services.rename_device(device, request.POST.get("display_name"))
     audit.resources(request, entitlement_id=device.entitlement_id, product_id=device.entitlement.product_id)
     return redirect("ui_entitlement", entitlement_id=device.entitlement_id)

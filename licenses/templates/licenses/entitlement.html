@@ -20,7 +20,7 @@
 </div>
 {% if devices %}
 <div class="card-grid">
-  {% for d in devices %}
+  {% for d, rename_form in devices %}
   {% with label=d.display_name|default:d.device_fingerprint %}
   <div class="card" x-data>
     <div class="flex items-center justify-between gap-2">
@@ -40,7 +40,7 @@
           <i class="ph ph-pencil-simple dialog-icon" aria-hidden="true"></i>
           <h2 class="dialog-title">{% trans "Rename" %}</h2>
         </div>
-        <label class="field"><span>{% trans "Name" %}</span><input x-ref="name" name="display_name" value="{{ d.display_name|default:'' }}" required></label>
+        <label class="field"><span>{% trans "Name" %}</span>{{ rename_form.display_name }}</label>
         <div class="dialog-actions">
           <button type="button" class="btn" @click="$refs.rename.close()">{% trans "Cancel" %}</button>
           <button type="submit" class="btn btn-primary">{% trans "Rename" %}</button>

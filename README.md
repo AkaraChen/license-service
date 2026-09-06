@@ -179,7 +179,8 @@ There is no operation registry, custom JSON type parser or OpenAPI builder.
 
 `licenses/services.py` and `licenses/models.py` own licensing state transitions
 and persistence. Customer pages call those services; Django authentication views
-and forms own login/logout. Existing rate-limit, audit and session-invalidation
+and forms own login/logout. `licenses/forms.py` declares Customer registration,
+redemption and device-name fields; templates render their bound fields and errors. Existing rate-limit, audit and session-invalidation
 adapters remain in `auth.py`, `registration.py`, `audit.py` and `signals.py`.
 
 For an honest audit budget include the schemas, HTTP adapter and shared audit middleware:

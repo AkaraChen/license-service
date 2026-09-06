@@ -4,6 +4,7 @@ from django.contrib.auth import login as auth_login
 from django.contrib.auth import logout as auth_logout
 from django.contrib.auth.forms import AuthenticationForm
 from django.contrib.auth.models import User
+from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.views.decorators.cache import never_cache
 from ninja import Router, Status
@@ -49,9 +50,8 @@ def create_product(request, data: s.ProductCreate):
     code = data.code.strip()
     if not code:
         raise Failure("validation_error", "code must not be empty.")
-    if Product.objects.filter(code__iexact=code).exists():
-        raise Failure("conflict", "A product with this code already exists.")
-    product = Product.objects.create(code=code, name=data.name)
+    with transaction.atomic():
+        product = Product.objects.create(code=code, name=data.name)
     audit.resources(request, product_id=product.pk)
     return Status(201, {"product": product})
 

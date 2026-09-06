@@ -56,8 +56,8 @@ def test_device_names_are_bounded_across_all_adapters(db, customer_api, redeemed
         Device.objects.filter(pk=device.pk).update(display_name="x" * 201)
 
 
-def test_device_history_stays_bounded_and_keeps_bound_devices(db, redeemed, settings):
-    settings.LICENSE_DEVICE_HISTORY_LIMIT = 3
+def test_device_history_stays_bounded_and_keeps_bound_devices(db, redeemed, monkeypatch):
+    monkeypatch.setattr(services, "DEVICE_HISTORY_LIMIT", 3)
     entitlement, _ = redeemed
     live, _ = services.bind(entitlement, "live")
     for i in range(10):
@@ -234,8 +234,8 @@ def test_malformed_unicode_and_nested_json_are_sanitized(db, body):
     assert not User.objects.exists()
 
 
-def test_account_capacity_rejects_new_registrations(db, customer, settings):
-    settings.LICENSE_ACCOUNT_LIMIT = 1
+def test_account_capacity_rejects_new_registrations(db, customer, monkeypatch):
+    monkeypatch.setattr(services, "MAX_ACCOUNTS", 1)
     response = post(Client(), "/api/auth/register", {"username": "new", "password": "pw"})
     assert response.status_code == 429
     assert User.objects.count() == 1

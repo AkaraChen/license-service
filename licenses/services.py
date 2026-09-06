@@ -5,10 +5,9 @@ import hashlib
 import secrets
 import time
 
-from django.conf import settings
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
-from django.core.cache import caches
+from django.core.cache import cache
 from django.db import IntegrityError, OperationalError, transaction
 from django.db.models import Value
 from django.db.models.functions import Lower
@@ -17,6 +16,8 @@ from django.utils.translation import gettext
 
 from .models import Entitlement, LicenseKey
 
+MAX_ACCOUNTS = 10_000
+DEVICE_HISTORY_LIMIT = 100
 FINGERPRINT_MAX_LENGTH = 128
 USERNAME_MAX_LENGTH = 150
 _KEY_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789"  # 32 chars from 29 symbols: ~155 bits (4.1.3)
@@ -52,14 +53,14 @@ def register_account(username, password, request=None):
         admit_registration(request)
 
     def work():
-        if User.objects.count() >= settings.LICENSE_ACCOUNT_LIMIT:
+        if User.objects.count() >= MAX_ACCOUNTS:
             raise Failure("rate_limited", "Account capacity reached. Contact the operator.")
         if User.objects.alias(canonical=Lower("username")).filter(canonical=Lower(Value(username))).exists():
             raise Failure("conflict", gettext("This username is already taken."))
         return User.objects.create_user(username=username, password=password)
 
     try:
-        with caches["security"].lock("registration", timeout=30, blocking_timeout=2):
+        with cache.lock("registration", timeout=30, blocking_timeout=2):
             return _atomic(work)
     except IntegrityError:
         raise Failure("conflict", gettext("This username is already taken.")) from None
@@ -184,7 +185,7 @@ def bind(entitlement, raw_fingerprint, display_name=None, *, source_key_id=None)
             return existing, False
         if locked.devices.filter(status="bound").count() >= locked.max_devices:
             raise Failure("seat_exhausted", gettext("This entitlement has no remaining device seats."))
-        budget = max(settings.LICENSE_DEVICE_HISTORY_LIMIT, locked.max_devices)
+        budget = max(DEVICE_HISTORY_LIMIT, locked.max_devices)
         excess = locked.devices.count() - budget + 1
         if excess > 0:
             stale_ids = list(

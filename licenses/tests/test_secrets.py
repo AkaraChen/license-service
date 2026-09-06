@@ -4,6 +4,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from urllib.parse import urlsplit, urlunsplit
 
 import pytest
 from django.contrib.auth.models import User
@@ -64,7 +65,13 @@ def test_restart_preserves_all_durable_rows(admin_api):
         "print(User.objects.count(),Product.objects.count(),LicenseKey.objects.count(),"
         "Entitlement.objects.count(),Device.objects.count())"
     )
-    env = {**os.environ, "LICENSE_STORE_NAME": str(db_file)}
+    url = urlsplit(os.environ.get("LICENSE_DATABASE_URL", "sqlite:///"))
+    database_url = (
+        f"sqlite:///{db_file}"
+        if connection.vendor == "sqlite"
+        else urlunsplit(url._replace(path="/" + str(db_file)))
+    )
+    env = {**os.environ, "LICENSE_DATABASE_URL": database_url}
     out = subprocess.run(
         [sys.executable, "-c", probe],
         capture_output=True,

@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Single-tenant license key service"
 requires-python = ">=3.12"
 dependencies = [
+    "dj-database-url>=3,<4",
     "django>=5.2",
     "django-admin-extra-buttons>=2.2.1",
     "django-axes>=8.3.1,<9",

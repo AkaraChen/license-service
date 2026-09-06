@@ -17,13 +17,15 @@ add executable adversarial and integration coverage.
 | 8 | Plaintext keys in sessions/backups | Immediate non-cacheable POST delivery for batch and single Admin issuance; no message/session handoff | Issuing responses, decoded database sessions, cookies and subsequent GETs inspected |
 | 9 | Missing HTML/Admin audit | Shared JSON audit emission and middleware with actor, outcome and known resource IDs; Admin hooks cover model mutations | Successful and failed customer mutations and Admin status changes |
 | 10 | Revocation/suspension race | Recheck current entitlement under row lock; anonymous activation locks key then entitlement and rechecks both | Stale resolution tests plus PostgreSQL concurrent revocation commit ordering |
-| 11 | Debug disclosure and parser failures | Debug defaults off; missing production secret fails WSGI import; explicit loopback debug setting; body, Unicode and JSON validation; sanitized expected DB errors | WSGI/default configuration tests, real HTTP malformed input, surrogate/nesting/size regressions |
+| 11 | Debug disclosure and parser failures | Debug defaults off; missing production secret fails WSGI import; local development command binds to loopback; body, Unicode and JSON validation; sanitized expected DB errors | WSGI/default configuration tests, real HTTP malformed input, surrogate/nesting/size regressions |
 | 12 | Empty-body session CSRF | Content type checked before empty-body shortcut; supplied Origin must match exactly for session/auth writes | All no-field session/admin mutations reject form media types without changes; sibling JSON origin rejected |
 | 13 | Login timing enumeration | Missing, inactive and active wrong-password attempts all pass through backend hasher work | Delegates password verification to Django ModelBackend; application tests cover active/inactive login results |
 
 ## Upgrade behavior
 
 - Configure the production secret, allowed hosts and TLS edge before starting.
+- Replace previous `LICENSE_STORE_*` variables with `LICENSE_DATABASE_URL`;
+  SQLite remains the default. Redis is the default cache for all consumers.
 - Run migrations. Existing sessions are invalidated once by `0003`; account data
   is retained. Duplicate identities stop migration rather than being merged.
 - Existing oversized device names must be corrected before the new constraint.
@@ -52,9 +54,9 @@ refresh their 15-minute TTL, while already-blocked attempts do not extend it.
 
 ## Validation results
 
-- Application suite with SQLite and Redis 7: **116 passed, 2 skipped**
+- Application suite with SQLite and Redis 7: **115 passed, 2 skipped**
   (PostgreSQL-only authorization lock ordering).
-- Application suite with PostgreSQL 17 and Redis 7: **118 passed**.
+- Application suite with PostgreSQL 17 and Redis 7: **117 passed**.
 - Ruff lint/format, Django system checks, migration drift, Compose configuration
   and whitespace checks pass. Both suites report three existing django-unfold
   deprecation warnings.

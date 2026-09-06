@@ -1,20 +1,13 @@
 """Shared registration rules, enforced by django-ratelimit in Redis."""
 
-from django.conf import settings
 from django.shortcuts import render
 from django_ratelimit.decorators import ratelimit
 
 from . import audit
 
 
-@ratelimit(
-    group="registration.global",
-    key=lambda g, r: "all",
-    rate=lambda g, r: f"{settings.LICENSE_REGISTRATION_GLOBAL_LIMIT}/h",
-)
-@ratelimit(
-    group="registration.source", key="ip", rate=lambda g, r: f"{settings.LICENSE_REGISTRATION_SOURCE_LIMIT}/h"
-)
+@ratelimit(group="registration.global", key=lambda g, r: "all", rate="100/h")
+@ratelimit(group="registration.source", key="ip", rate="5/h")
 def admit_registration(request):
     pass
 

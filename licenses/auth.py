@@ -2,7 +2,6 @@
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.backends import ModelBackend
-from django.core.exceptions import PermissionDenied
 from django.db.models import Value
 from django.db.models.functions import Lower
 
@@ -20,12 +19,9 @@ def canonical_username(request, credentials):
 
 class CaseInsensitiveBackend(ModelBackend):
     def authenticate(self, request, username=None, password=None, **kwargs):
-        user = super().authenticate(
+        return super().authenticate(
             request, username=canonical_username(request, {"username": username}), password=password, **kwargs
         )
-        if user is None:
-            raise PermissionDenied
-        return user
 
 
 def lockout_response(request, response, credentials=None):

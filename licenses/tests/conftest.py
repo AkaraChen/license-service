@@ -102,6 +102,6 @@ def isolated_security_cache():
     from django.core.cache import caches
 
     # delete_pattern applies this test process's random KEY_PREFIX; never FLUSHDB.
-    caches["security"].delete_pattern("*")
+    caches["default"].delete_pattern("*")
     yield
-    caches["security"].delete_pattern("*")
+    caches["default"].delete_pattern("*")

@@ -13,8 +13,7 @@ def run_manage(*args, **env_overrides):
     env = {
         **os.environ,
         "DJANGO_SETTINGS_MODULE": "config.settings",
-        "LICENSE_STORE_ENGINE": "sqlite3",
-        "LICENSE_STORE_NAME": str(Path(BASE) / "license_store.sqlite3"),
+        "LICENSE_DATABASE_URL": f"sqlite:///{Path(BASE) / 'license_store.sqlite3'}",
         **env_overrides,
     }
     env.pop("LICENSE_SESSION_SECRET", None) if "LICENSE_SESSION_SECRET" not in env_overrides else None
@@ -27,12 +26,6 @@ def run_manage(*args, **env_overrides):
         timeout=60,
         check=False,
     )
-
-
-def test_unknown_store_engine_is_config_invalid():
-    out = run_manage("check", LICENSE_STORE_ENGINE="bogus-engine")
-    assert out.returncode != 0
-    assert "config_invalid" in (out.stderr + out.stdout)
 
 
 def test_production_without_session_secret_is_config_invalid():
@@ -51,24 +44,18 @@ def test_production_with_session_secret_passes_check():
 
 def test_unreachable_store_prevents_startup():
     """PostgreSQL engine with no server (and possibly no driver) must fail startup."""
-    out = run_manage(
-        "migrate",
-        "--run-syncdb",
-        LICENSE_STORE_ENGINE="postgresql",
-        LICENSE_STORE_PORT="1",
-        LICENSE_STORE_HOST="127.0.0.1",
-    )
+    out = run_manage("migrate", "--run-syncdb", LICENSE_DATABASE_URL="postgresql://localhost:1/licenses")
     assert out.returncode != 0
 
 
 def test_sqlite_store_opens_and_migrates(tmp_path):
     db_file = tmp_path / "store.sqlite3"
-    out = run_manage("migrate", LICENSE_STORE_NAME=str(db_file))
+    out = run_manage("migrate", LICENSE_DATABASE_URL=f"sqlite:///{db_file}")
     assert out.returncode == 0, out.stderr
     assert db_file.exists()
 
 
-def test_default_wsgi_profile_requires_secret_and_debug_is_loopback_only():
+def test_default_wsgi_profile_requires_secret():
     env = {**os.environ, "DJANGO_SETTINGS_MODULE": "config.settings"}
     env.pop("LICENSE_DEBUG", None)
     env.pop("LICENSE_SESSION_SECRET", None)
@@ -82,9 +69,6 @@ def test_default_wsgi_profile_requires_secret_and_debug_is_loopback_only():
     )
     assert result.returncode != 0
     assert "LICENSE_SESSION_SECRET is required" in result.stderr
-    result = run_manage("check", LICENSE_DEBUG="1", LICENSE_LISTEN_HOST="0.0.0.0")
-    assert result.returncode != 0
-    assert "debug mode requires a loopback listener" in result.stderr
 
 
 def test_production_http_redirect_and_cookie_flags(tmp_path):
@@ -93,8 +77,7 @@ def test_production_http_redirect_and_cookie_flags(tmp_path):
         "LICENSE_SESSION_SECRET": "test-only-production-secret-" * 3,
         "LICENSE_ALLOWED_HOSTS": "127.0.0.1,testserver",
         "LICENSE_TRUST_PROXY": "1",
-        "LICENSE_STORE_ENGINE": "sqlite3",
-        "LICENSE_STORE_NAME": str(tmp_path / "production.sqlite3"),
+        "LICENSE_DATABASE_URL": f"sqlite:///{tmp_path / 'production.sqlite3'}",
     }
     assert run_manage("migrate", **env).returncode == 0
     # Real WSGI HTTP requests: direct plaintext redirects before any account write;
@@ -142,7 +125,7 @@ finally:
 
 
 def test_security_migration_refuses_duplicate_identities_and_retires_sessions(tmp_path):
-    env = {"LICENSE_DEBUG": "1", "LICENSE_STORE_NAME": str(tmp_path / "upgrade.sqlite3")}
+    env = {"LICENSE_DEBUG": "1", "LICENSE_DATABASE_URL": f"sqlite:///{tmp_path / 'upgrade.sqlite3'}"}
     assert run_manage("migrate", **env).returncode == 0
     assert run_manage("migrate", "licenses", "0002", **env).returncode == 0
     seed = """

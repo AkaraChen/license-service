@@ -30,29 +30,29 @@ Then open:
 
 ## Configuration (SPEC Section 6)
 
-All configuration is environment variables; changing any `store` field requires a restart.
+Deployment needs only a production secret and allowed hosts when using the local
+SQLite and Redis defaults. Restart after changing environment variables.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `LICENSE_LISTEN_HOST` / `LICENSE_LISTEN_PORT` | `127.0.0.1` / `8000` | bind address (passed to `runserver`) |
-| `LICENSE_STORE_ENGINE` | `sqlite3` | `sqlite3` or `postgresql` |
-| `LICENSE_STORE_NAME` | `./license_store.sqlite3` | sqlite file path, or database name |
-| `LICENSE_STORE_USER` / `_PASSWORD` / `_HOST` / `_PORT` | — | postgresql only |
-| `LICENSE_SESSION_SECRET` | dev default | **required** when `LICENSE_DEBUG=0` (no production default) |
-| `LICENSE_DEBUG` | `0` | opt in with `1` for local development only |
-| `LICENSE_ALLOWED_HOSTS` | `localhost,127.0.0.1,[::1]` | comma-separated |
-| `LICENSE_REDIS_URL` | `redis://127.0.0.1:6379/0` | shared Redis for login/registration limits and the registration lock |
-| `LICENSE_CACHE_PREFIX` | `license-service` | namespace shared by every worker of this service |
-| `LICENSE_TRUST_PROXY` | `0` | set `1` only when a trusted edge strips/replaces `X-Forwarded-Proto` |
-| `LICENSE_REGISTRATION_SOURCE_LIMIT` | `5` | registration attempts per direct peer per hour |
-| `LICENSE_REGISTRATION_GLOBAL_LIMIT` | `100` | registration attempts across all sources per hour |
-| `LICENSE_ACCOUNT_LIMIT` | `10000` | total account capacity for public registration |
-| `LICENSE_DEVICE_HISTORY_LIMIT` | `100` | retained device rows per entitlement, at least its seat limit |
+| `LICENSE_SESSION_SECRET` | required in production | session signing secret |
+| `LICENSE_ALLOWED_HOSTS` | `localhost,127.0.0.1,[::1]` | comma-separated hostnames |
+| `LICENSE_DATABASE_URL` | `sqlite:///<project>/license_store.sqlite3` | SQLite or PostgreSQL connection URL, parsed by dj-database-url |
+| `LICENSE_REDIS_URL` | `redis://127.0.0.1:6379/0` | shared Redis |
+| `LICENSE_DEBUG` | `0` | `just serve` enables local development on `127.0.0.1:8000` |
+| `LICENSE_TRUST_PROXY` | `0` | enable only when the edge strips/replaces `X-Forwarded-Proto` and blocks direct upstream access |
 
-Preflight (6.4): `manage.py check` (also run by `runserver`) fails startup with
-`config_invalid` when the production secret is missing (`licenses.E001`) and with
-`store_unavailable` when the store engine cannot be opened (`licenses.E002`).
-Unknown engines raise `ImproperlyConfigured("config_invalid: ...")` at settings import.
+Registration limits are fixed at 5 attempts per peer/hour and 100 globally/hour.
+Public registration stops at 10,000 accounts; device history retains 100 rows per
+entitlement, or its seat limit if larger. All cache users share Redis with the
+`license-service` prefix; separate deployments should use separate Redis databases.
+
+`LICENSE_DATABASE_URL` replaces the previous `LICENSE_STORE_*` variables; for
+PostgreSQL, use `postgresql://user:password@host:5432/licenses` and install
+`psycopg[binary]`. Binding is controlled by the application server's own arguments.
+
+Startup rejects a missing production secret (`licenses.E001`). `manage.py check`
+also rejects an unreachable database (`licenses.E002`).
 
 ## Implementation-defined profile (SPEC Section 11)
 
@@ -64,7 +64,7 @@ Unknown engines raise `ImproperlyConfigured("config_invalid: ...")` at settings 
   (durable across restarts), cookie name `sessionid`, HttpOnly.
 - **Store engines**: SQLite (default) and PostgreSQL, via the Django ORM. Core
   Conformance runs on SQLite; PostgreSQL is supported through the same ORM layer
-  (run the suite with `LICENSE_STORE_ENGINE=postgresql` for the Real Integration
+  (run the suite with `LICENSE_DATABASE_URL=postgresql://…` for the Real Integration
   Profile).
 - **Admin UI generator**: Django Admin (`licenses/admin.py`).
 - **UI language**: Django gettext, `en` and `zh-hans`. `LocaleMiddleware` picks
@@ -135,7 +135,7 @@ Unknown engines raise `ImproperlyConfigured("config_invalid: ...")` at settings 
   and one-year HSTS. Set `LICENSE_SESSION_SECRET` and `LICENSE_ALLOWED_HOSTS`;
   terminate TLS at your edge. Only enable `LICENSE_TRUST_PROXY=1` when that edge
   strips and replaces the scheme header and prevents direct upstream access.
-  Development requires explicit `LICENSE_DEBUG=1` and a loopback listen setting.
+  Development uses `just serve`, which binds to loopback and enables `LICENSE_DEBUG=1`.
 - **One-time key delivery**: Admin single/batch issuance renders plaintext directly
   in the POST response with `Cache-Control: no-store`; no session, message cookie,
   or redirect handoff contains the key. JSON issuance is also non-cacheable.
@@ -175,7 +175,7 @@ blank lines excluded).
 
 The domain core — entities and invariants (`models.py`), the Section 7 state
 machines (`services.py`), and the HTTP contract with validation, authorization, and
-audit logging (`api.py`) — is **582 code lines**. The expanded security controls
+audit logging (`api.py`) — is **583 code lines**. The expanded security controls
 exceed the original 500-line core target. Library adapters for login/registration
 limits, audit emission and session invalidation live in dedicated modules; presentation uses the shared
 registry/services.
@@ -183,22 +183,22 @@ registry/services.
 | File | Code lines (scc) | Layer |
 | --- | --- | --- |
 | `licenses/models.py` | 57 | Persistence (entities and uniqueness invariants) |
-| `licenses/services.py` | 190 | Policy (authentication/redeem/bind/unbind/validate, seats) |
+| `licenses/services.py` | 191 | Policy (authentication/redeem/bind/unbind/validate, seats) |
 | `licenses/api.py` | 335 | Coordination (25 ops, validation, authz, logging) |
-| **domain core subtotal** | **582** | |
-| `licenses/auth.py` | 24 | Account-name and lockout-response adapters |
-| `licenses/registration.py` | 22 | django-ratelimit rules and HTML response |
+| **domain core subtotal** | **583** | |
+| `licenses/auth.py` | 20 | Account-name and lockout-response adapters |
+| `licenses/registration.py` | 15 | django-ratelimit rules and HTML response |
 | `licenses/audit.py` | 59 | Shared audit emission |
 | `licenses/signals.py` | 14 | Session invalidation |
-| **core and security modules subtotal** | **701** | |
+| **core and security modules subtotal** | **691** | |
 | `licenses/openapi.py` | 64 | Presentation (OpenAPI from the registry) |
 | `licenses/views_ui.py` | 118 | Presentation (Customer HTML pages) |
 | `licenses/admin.py` | 155 | Presentation (Admin console config) |
-| `licenses/apps.py` | 25 | Startup preflight checks |
-| `config/`, `manage.py` | 228 | Standard Django project scaffolding |
+| `licenses/apps.py` | 16 | Startup preflight checks |
+| `config/`, `manage.py` | 189 | Standard Django project scaffolding |
 | `licenses/templates/` | — | HTML (Django templates + Tailwind) |
 | `src/styles.css` | — | Tailwind source (compiled to `assets/css/tailwind.css`) |
-| `licenses/tests/` | 1326 | pytest suite (not counted as core) |
+| `licenses/tests/` | 1318 | pytest suite (not counted as core) |
 
 Reproduce: `scc --no-cocomo --no-size licenses/models.py licenses/services.py licenses/api.py`
 

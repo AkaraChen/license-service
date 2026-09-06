@@ -71,13 +71,14 @@ also rejects an unreachable database (`licenses.E002`).
 - **UI language**: Django gettext, `en` and `zh-hans`. `LocaleMiddleware` picks
   the language from `Accept-Language`; there is no in-page switcher. Machine
   `error` class names stay English.
-- **Logging library**: Python `logging`, logger `licenses.api`, console handler.
-  Every JSON mutation/validation and HTML/Admin mutation logs a JSON record with
-  `op`, `actor`, `outcome`, a request correlation id (`rid`), and known resource IDs
-  (`account_id`, `product_id`, `entitlement_id`, `device_id`, or Admin object IDs).
-  Client request IDs must match `[A-Za-z0-9_-]{1,64}`; other values are replaced.
-  Logging never contains key plaintext, `key_hash`, passwords, session secrets, or raw
-  fingerprints (Python logging handler failures never fail the request).
+- **Logging library**: `structlog` + `django-structlog`, logger `licenses.api`,
+  JSON on the console. Every JSON mutation/validation and HTML/Admin mutation logs
+  a JSON record with `op`, `actor`, `outcome`, a request correlation id (`rid`),
+  and known resource IDs (`account_id`, `product_id`, `entitlement_id`, `device_id`,
+  or Admin object IDs). Client `X-Request-ID` is accepted only when it matches
+  `[A-Za-z0-9_-]{1,64}`; other values are replaced before django-structlog binds
+  `request_id`. Logging never contains key plaintext, `key_hash`, passwords,
+  session secrets, or raw fingerprints (sink failures never fail the request).
 - **License Key generation**: `lic_` + 32 characters from a 29-symbol alphabet
   (`abcdefghjkmnpqrstuvwxyz23456789`, no look-alikes) from `secrets.choice`:
   ~155 bits of entropy. Only the SHA-256 hex digest and the first 12 characters
@@ -177,8 +178,8 @@ The Django app lives in `src/licenses` with MTV in three packages: `models/`,
 stays in `src/licenses/admin.py`.
 Django Ninja routers in `src/licenses/views/api.py` declare the 25 machine operations.
 Pydantic request schemas live in `src/licenses/views/schemas.py`; `views/http.py`
-retains the license-specific error contract and staff flag. The existing audit
-middleware handles all adapters and the current JSON same-origin policy. Ninja
+retains the license-specific error contract and staff flag. Audit middleware logs mutations; `JsonWritePolicyMiddleware` keeps the JSON
+same-origin + Content-Type write policy and the `/api/` 405 envelope. Ninja
 generates `/openapi.json` and `/docs`. There is no operation registry, custom JSON
 type parser or OpenAPI builder.
 

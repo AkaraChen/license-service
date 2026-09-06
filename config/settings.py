@@ -6,6 +6,7 @@ from datetime import timedelta
 from pathlib import Path
 
 import dj_database_url
+import structlog
 from django.core.exceptions import ImproperlyConfigured
 from django.templatetags.static import static
 
@@ -51,6 +52,7 @@ INSTALLED_APPS = [
     "admin_extra_buttons",
     "django_tailwind_cli",
     "licenses",
+    "django_structlog",
     "axes",
     "django_ratelimit",
 ]
@@ -61,6 +63,9 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "licenses.audit.SanitizeRequestIdMiddleware",
+    "django_structlog.middlewares.RequestMiddleware",
+    "licenses.audit.JsonWritePolicyMiddleware",
     "licenses.audit.AuditMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django_ratelimit.middleware.RatelimitMiddleware",
@@ -169,6 +174,22 @@ LOGGING = {
     "handlers": {"console": {"class": "logging.StreamHandler"}},
     "loggers": {
         "licenses": {"handlers": ["console"], "level": "INFO"},
+        "django_structlog": {"handlers": ["console"], "level": "INFO"},
         "axes": {"handlers": ["console"], "level": "ERROR", "propagate": False},
     },
 }
+structlog.configure(
+    processors=[
+        structlog.contextvars.merge_contextvars,
+        structlog.stdlib.filter_by_level,
+        structlog.stdlib.add_logger_name,
+        structlog.stdlib.add_log_level,
+        structlog.processors.JSONRenderer(ensure_ascii=True),
+    ],
+    logger_factory=structlog.stdlib.LoggerFactory(),
+    wrapper_class=structlog.stdlib.BoundLogger,
+    cache_logger_on_first_use=True,
+)
+# django-structlog copies X-Request-ID verbatim; SanitizeRequestIdMiddleware
+# keeps only [A-Za-z0-9_-]{1,64}. It does not log bodies.
+DJANGO_STRUCTLOG_IP_LOGGING_ENABLED = False

@@ -1,0 +1,11 @@
+{
+  "name": "License Service",
+  "user": "ubuntu",
+  "install": "curl -LsSf https://astral.sh/uv/install.sh | sh && curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --force --to \"$HOME/.local/bin\" && export PATH=\"$HOME/.local/bin:$PATH\" && uv sync && uv run python manage.py migrate && uv run python manage.py tailwind build",
+  "terminals": [
+    {
+      "name": "server",
+      "command": "export PATH=\"$HOME/.local/bin:$PATH\" && just serve"
+    }
+  ]
+}

@@ -52,12 +52,12 @@ class Redeem(Empty):
 
 
 class DeviceName(Empty):
-    display_name: Annotated[str, Field(max_length=200)] | None
+    display_name: Annotated[str, Field(min_length=1, max_length=200)] | None
 
 
 class DeviceBind(Empty):
     device_fingerprint: str
-    display_name: Annotated[str, Field(max_length=200)] | None = None
+    display_name: Annotated[str, Field(min_length=1, max_length=200)] | None = None
 
 
 class Validate(Redeem):
@@ -65,7 +65,7 @@ class Validate(Redeem):
 
 
 class Activate(Validate):
-    display_name: Annotated[str, Field(max_length=200)] | None = None
+    display_name: Annotated[str, Field(min_length=1, max_length=200)] | None = None
 
 
 class Product(Schema):

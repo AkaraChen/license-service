@@ -11,7 +11,7 @@ from django.contrib.sessions.models import Session
 from django.db import DataError, IntegrityError, transaction
 from django.test import Client, override_settings
 
-from licenses import services
+from licenses import accounts, services
 from licenses.models import Device, Entitlement, LicenseKey
 
 from .conftest import ALICE_PW
@@ -235,7 +235,7 @@ def test_malformed_unicode_and_nested_json_are_sanitized(db, body):
 
 
 def test_account_capacity_rejects_new_registrations(db, customer, monkeypatch):
-    monkeypatch.setattr(services, "MAX_ACCOUNTS", 1)
+    monkeypatch.setattr(accounts, "MAX_ACCOUNTS", 1)
     response = post(Client(), "/api/auth/register", {"username": "new", "password": "pw"})
     assert response.status_code == 429
     assert User.objects.count() == 1

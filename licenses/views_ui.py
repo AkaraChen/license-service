@@ -1,7 +1,7 @@
 """Customer HTML pages (SPEC 3.1.4): register, login, logout, redeem,
 entitlement list, device list/unbind/rename. Bind happens in the licensed
 application (JSON API), not on these pages. Form posts invoke the same
-services.py mutations as the JSON operations (5.1.1). The Admin console is
+accounts.py/services.py mutations as the JSON operations (5.1.1). The Admin console is
 Django Admin at /admin/ and is never linked or exposed here.
 """
 
@@ -14,7 +14,7 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.translation import gettext as _
 from django.views.decorators.http import require_GET, require_POST
 
-from . import audit, services
+from . import accounts, audit, services
 from .models import Device, Entitlement
 from .services import Failure
 
@@ -56,14 +56,14 @@ def register_page(request):
         return redirect(nxt or "ui_home")
     if request.method == "POST":
         try:
-            user = services.register_account(
+            user = accounts.register_account(
                 request.POST.get("username"), request.POST.get("password"), request=request
             )
         except Failure as exc:
             audit.resources(request, outcome=exc.error)
             return render(request, "licenses/register.html", {"error": exc.message, "next": nxt})
         audit.resources(request, actor="admin" if user.is_staff else "customer", account_id=user.pk)
-        login(request, user, backend="licenses.auth.CaseInsensitiveBackend")
+        login(request, user, backend="licenses.accounts.CaseInsensitiveBackend")
         return redirect(nxt or "ui_home")
     return render(request, "licenses/register.html", {"next": nxt})
 

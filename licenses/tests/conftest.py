@@ -4,7 +4,7 @@ import pytest
 from django.contrib.auth.models import User
 from django.test import Client
 
-from licenses import services
+from licenses import accounts, services
 from licenses.models import Product
 
 ADMIN_PW = "admin-pw-123"
@@ -59,12 +59,12 @@ def admin_api(admin):
 
 @pytest.fixture
 def customer(db):
-    return services.register_account("alice", ALICE_PW)
+    return accounts.register_account("alice", ALICE_PW)
 
 
 @pytest.fixture
 def other_customer(db):
-    return services.register_account("bob", BOB_PW)
+    return accounts.register_account("bob", BOB_PW)
 
 
 @pytest.fixture

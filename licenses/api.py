@@ -17,7 +17,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django_ratelimit.exceptions import Ratelimited
 from redis.exceptions import RedisError
 
-from . import audit, services
+from . import accounts, audit, services
 from .models import Device, Entitlement, LicenseKey, Product
 from .services import Failure
 
@@ -226,7 +226,7 @@ def _get_op(name, op_path, auth, key, model, serializer):
 
 @op("register", "POST", "auth/register", "anonymous", (("username", "str", True), ("password", "str", True)))
 def register(request, data, ctx):
-    user = services.register_account(data["username"], data["password"], request=request)
+    user = accounts.register_account(data["username"], data["password"], request=request)
     ctx.update(actor="customer", account_id=user.pk)
     return {"account": account_json(user)}, 201
 

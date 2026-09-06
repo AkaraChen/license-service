@@ -98,15 +98,15 @@ CACHES = {
         "OPTIONS": {"SOCKET_CONNECT_TIMEOUT": 2, "SOCKET_TIMEOUT": 2},
     }
 }
-AUTHENTICATION_BACKENDS = ["axes.backends.AxesStandaloneBackend", "licenses.auth.CaseInsensitiveBackend"]
+AUTHENTICATION_BACKENDS = ["axes.backends.AxesStandaloneBackend", "licenses.accounts.CaseInsensitiveBackend"]
 AXES_HANDLER = "axes.handlers.cache.AxesCacheHandler"
 AXES_FAILURE_LIMIT = 5
 AXES_COOLOFF_TIME = timedelta(minutes=15)
 AXES_LOCKOUT_PARAMETERS = ["username", "ip_address"]
-AXES_USERNAME_CALLABLE = "licenses.auth.canonical_username"
-AXES_LOCKOUT_CALLABLE = "licenses.auth.lockout_response"
+AXES_USERNAME_CALLABLE = "licenses.accounts.axes_username"
+AXES_LOCKOUT_CALLABLE = "licenses.accounts.lockout_response"
 AXES_RESET_COOL_OFF_ON_FAILURE_DURING_LOCKOUT = False
-RATELIMIT_VIEW = "licenses.registration.ratelimited"
+RATELIMIT_VIEW = "licenses.accounts.ratelimited"
 # Admin theme matches the customer pages: Geist, grayscale surface, one blue accent.
 UNFOLD = {
     "SITE_TITLE": "License Service",

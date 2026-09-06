@@ -4,9 +4,8 @@ Account registration and authentication live in accounts.py.
 
 import hashlib
 import secrets
-import time
 
-from django.db import OperationalError, transaction
+from django.db import transaction
 from django.utils import timezone
 from django.utils.translation import gettext
 
@@ -53,20 +52,6 @@ def revoke_key(key):
     return key
 
 
-def _atomic(work):
-    """One transaction per mutation. PostgreSQL serializes concurrent binds via
-    select_for_update row locks; SQLite serializes writers at the database
-    level, so a busy write retries the whole check-and-insert (Invariant 3)."""
-    for attempt in range(10):
-        try:
-            with transaction.atomic():
-                return work()
-        except OperationalError as exc:
-            if "locked" not in str(exc) or attempt == 9:
-                raise
-            time.sleep(0.02 * (attempt + 1))
-
-
 def redeem(account, plaintext):
     """Section 7.4. Returns (entitlement, created); idempotent for the same Account."""
 
@@ -98,7 +83,8 @@ def redeem(account, plaintext):
         key.save(update_fields=("status", "redeemed_by"))
         return entitlement, True
 
-    return _atomic(work)
+    with transaction.atomic():
+        return work()
 
 
 def check_active(entitlement):
@@ -151,7 +137,8 @@ def bind(entitlement, raw_fingerprint, display_name=None, *, source_key_id=None)
             locked.devices.filter(pk__in=stale_ids).delete()
         return locked.devices.create(device_fingerprint=fp, display_name=display_name), True
 
-    return _atomic(work)
+    with transaction.atomic():
+        return work()
 
 
 def unbind(device):

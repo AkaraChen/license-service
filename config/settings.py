@@ -35,6 +35,10 @@ DATABASES = {
         env="LICENSE_DATABASE_URL", default=f"sqlite:///{BASE_DIR / 'license_store.sqlite3'}"
     )
 }
+if DATABASES["default"]["ENGINE"] == "django.db.backends.sqlite3":
+    DATABASES["default"].setdefault("OPTIONS", {})
+    DATABASES["default"]["OPTIONS"]["timeout"] = 20
+    DATABASES["default"]["OPTIONS"]["transaction_mode"] = "IMMEDIATE"
 
 INSTALLED_APPS = [
     "unfold",  # before django.contrib.admin so its templates win

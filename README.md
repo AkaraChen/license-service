@@ -71,14 +71,11 @@ also rejects an unreachable database (`licenses.E002`).
 - **UI language**: Django gettext, `en` and `zh-hans`. `LocaleMiddleware` picks
   the language from `Accept-Language`; there is no in-page switcher. Machine
   `error` class names stay English.
-- **Logging library**: `structlog` + `django-structlog`, logger `licenses.api`,
-  JSON on the console. Every JSON mutation/validation and HTML/Admin mutation logs
-  a JSON record with `op`, `actor`, `outcome`, a request correlation id (`rid`),
-  and known resource IDs (`account_id`, `product_id`, `entitlement_id`, `device_id`,
-  or Admin object IDs). Client `X-Request-ID` is accepted only when it matches
-  `[A-Za-z0-9_-]{1,64}`; other values are replaced before django-structlog binds
-  `request_id`. Logging never contains key plaintext, `key_hash`, passwords,
-  session secrets, or raw fingerprints (sink failures never fail the request).
+- **Logging**: Django `logging.getLogger(__name__)` with `extra={...}` at mutation
+  sites. `LOGGING` in settings uses a console formatter that appends extra keys.
+  `RequestIdMiddleware` copies `X-Request-ID` onto log records when the client
+  sent that header; the service does not generate an id. Logging never contains
+  key plaintext, `key_hash`, passwords, session secrets, or raw fingerprints.
 - **License Key generation**: `lic_` + 32 characters from a 29-symbol alphabet
   (`abcdefghjkmnpqrstuvwxyz23456789`, no look-alikes) from `secrets.choice`:
   ~155 bits of entropy. Only the SHA-256 hex digest and the first 12 characters
@@ -179,7 +176,8 @@ The Django app lives in `src/licenses` with MTV in three packages: `models/`,
 stays in `src/licenses/admin.py`.
 Django Ninja routers in `src/licenses/views/api.py` declare the 25 machine operations.
 Pydantic request schemas live in `src/licenses/views/schemas.py`; `views/http.py`
-retains the license-specific error contract and staff flag. Audit middleware logs mutations; `JsonWritePolicyMiddleware` keeps the JSON
+retains the license-specific error contract and staff flag. Views log mutations
+with the stdlib logger; `JsonWritePolicyMiddleware` keeps the JSON
 same-origin + Content-Type write policy and the `/api/` 405 envelope. Ninja
 generates `/openapi.json` and `/docs`. There is no operation registry, custom JSON
 type parser or OpenAPI builder.
@@ -188,13 +186,12 @@ type parser or OpenAPI builder.
 and persistence. Customer pages call those services; Django authentication views
 and forms own login/logout. `src/licenses/views/forms.py` declares Customer
 registration, redemption and device-name fields; templates render their bound fields
-and errors. Existing rate-limit, audit and session-invalidation adapters remain in
-`accounts.py` and `audit.py`.
+and errors. Rate-limit and session-invalidation adapters remain in `accounts.py`.
 
-For an honest audit budget include the schemas, HTTP adapter and shared audit middleware:
+For an honest audit budget include the schemas and HTTP adapter:
 
 ```bash
-scc --no-cocomo --no-size src/licenses/views/api.py src/licenses/views/http.py src/licenses/views/schemas.py src/licenses/audit.py
+scc --no-cocomo --no-size src/licenses/views/api.py src/licenses/views/http.py src/licenses/views/schemas.py
 ```
 
 ## Tests
@@ -218,7 +215,7 @@ The suite extends the original 80 conformance tests with security regressions:
   cross-process restart durability; durable sessions.
 - `test_immutability.py` — 17.6: no operation mutates `max_devices`/`expires_at`;
   8-thread concurrent bind race never exceeds `max_devices`.
-- `test_openapi_logs.py` — 17.7: served OpenAPI lists the required operationIds; audit logs carry `actor`/`outcome`/`rid` and never secrets.
+- `test_openapi_logs.py` — 17.7: served OpenAPI lists the required operationIds; mutation logs emit event names and never secrets.
 - `test_html.py` — 17.8: Admin console gating, Customer page flow
   (register → redeem → bind → unbind), no Admin console exposure, plaintext shown once.
 - `test_config.py` — 17.8: `config_invalid` and unreachable store prevent startup.

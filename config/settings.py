@@ -1,14 +1,35 @@
 """Production defaults; local development opts in with LICENSE_DEBUG=1."""
 
+import json
+import logging
 import os
 import sys
 from datetime import timedelta
 from pathlib import Path
 
 import dj_database_url
-import structlog
 from django.core.exceptions import ImproperlyConfigured
 from django.templatetags.static import static
+
+
+class ExtraFormatter(logging.Formatter):
+    _standard = set(logging.LogRecord("n", 0, "", 0, "", (), None).__dict__) | {
+        "message",
+        "asctime",
+        "taskName",
+    }
+
+    def format(self, record):
+        extras = {
+            key: value
+            for key, value in record.__dict__.items()
+            if key not in self._standard and not key.startswith("_")
+        }
+        formatted = super().format(record)
+        if extras:
+            return f"{formatted} {json.dumps(extras, default=str, ensure_ascii=True)}"
+        return formatted
+
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 SRC_DIR = BASE_DIR / "src"
@@ -52,7 +73,6 @@ INSTALLED_APPS = [
     "admin_extra_buttons",
     "django_tailwind_cli",
     "licenses",
-    "django_structlog",
     "axes",
     "django_ratelimit",
 ]
@@ -63,10 +83,8 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
-    "licenses.audit.SanitizeRequestIdMiddleware",
-    "django_structlog.middlewares.RequestMiddleware",
-    "licenses.audit.JsonWritePolicyMiddleware",
-    "licenses.audit.AuditMiddleware",
+    "licenses.middleware.RequestIdMiddleware",
+    "licenses.middleware.JsonWritePolicyMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django_ratelimit.middleware.RatelimitMiddleware",
     "axes.middleware.AxesMiddleware",
@@ -111,10 +129,7 @@ CACHES = {
         "OPTIONS": {"SOCKET_CONNECT_TIMEOUT": 2, "SOCKET_TIMEOUT": 2},
     }
 }
-AUTHENTICATION_BACKENDS = [
-    "axes.backends.AxesStandaloneBackend",
-    "django.contrib.auth.backends.ModelBackend",
-]
+AUTHENTICATION_BACKENDS = ["axes.backends.AxesStandaloneBackend", "django.contrib.auth.backends.ModelBackend"]
 AXES_HANDLER = "axes.handlers.cache.AxesCacheHandler"
 AXES_FAILURE_LIMIT = 5
 AXES_COOLOFF_TIME = timedelta(minutes=15)
@@ -173,25 +188,20 @@ UNFOLD = {
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
-    "handlers": {"console": {"class": "logging.StreamHandler"}},
+    "filters": {"request_id": {"()": "licenses.middleware.RequestIdFilter"}},
+    "formatters": {
+        "console": {
+            "()": "config.settings.ExtraFormatter",
+            "format": "{levelname} {name} {message}",
+            "style": "{",
+        }
+    },
+    "handlers": {
+        "console": {"class": "logging.StreamHandler", "formatter": "console", "filters": ["request_id"]}
+    },
     "loggers": {
-        "licenses": {"handlers": ["console"], "level": "INFO"},
-        "django_structlog": {"handlers": ["console"], "level": "INFO"},
+        "django": {"handlers": ["console"], "level": "INFO"},
+        "licenses": {"handlers": ["console"], "level": "INFO", "filters": ["request_id"]},
         "axes": {"handlers": ["console"], "level": "ERROR", "propagate": False},
     },
 }
-structlog.configure(
-    processors=[
-        structlog.contextvars.merge_contextvars,
-        structlog.stdlib.filter_by_level,
-        structlog.stdlib.add_logger_name,
-        structlog.stdlib.add_log_level,
-        structlog.processors.JSONRenderer(ensure_ascii=True),
-    ],
-    logger_factory=structlog.stdlib.LoggerFactory(),
-    wrapper_class=structlog.stdlib.BoundLogger,
-    cache_logger_on_first_use=True,
-)
-# django-structlog copies X-Request-ID verbatim; SanitizeRequestIdMiddleware
-# keeps only [A-Za-z0-9_-]{1,64}. It does not log bodies.
-DJANGO_STRUCTLOG_IP_LOGGING_ENABLED = False

@@ -94,12 +94,13 @@ also rejects an unreachable database (`licenses.E002`).
   reported as `unknown_key` so key existence is not leaked before redeem.
 - **Revoking a redeemed key** sets the key `revoked` and leaves the Entitlement
   unchanged (7.1); validate then fails with `key_revoked`.
-- **Concurrency (Invariant 3)**: the seat check and insert run in one transaction.
-  PostgreSQL serializes concurrent binds with `SELECT ... FOR UPDATE` on the
-  Entitlement row; SQLite serializes writers at the database level and a busy write
-  retries the whole check-and-insert (bounded, 10 attempts). The current entitlement
-  status/expiry is checked under the lock. Anonymous activation also locks and
-  rechecks the key, in key-then-entitlement order.
+- **Concurrency (Invariant 3)**: the seat check and insert run in one transaction
+  with `SELECT ... FOR UPDATE` on the Entitlement row (and the key, for anonymous
+  activation, in key-then-entitlement order). PostgreSQL serializes concurrent
+  binds with those row locks. SQLite serializes writers at the database level;
+  the connection uses a 20s busy timeout and `IMMEDIATE` transactions so a locked
+  write waits instead of failing immediately. The current entitlement
+  status/expiry is checked under the lock.
 - **CSRF policy**: the JSON API is `csrf_exempt` but every write requires
   `Content-Type: application/json`, including empty writes (send `{}`). Session
   writes and login/registration reject a supplied Origin unless it exactly matches

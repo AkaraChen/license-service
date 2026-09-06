@@ -5,7 +5,7 @@ from django.contrib.auth.backends import ModelBackend
 from django.contrib.auth.models import User
 from django.contrib.sessions.models import Session
 from django.core.cache import cache
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 from django.db.models import Value
 from django.db.models.functions import Lower
 from django.shortcuts import render
@@ -13,7 +13,7 @@ from django.utils.translation import gettext
 from django_ratelimit.decorators import ratelimit
 
 from . import audit
-from .services import Failure, _atomic, validate_text
+from .services import Failure, validate_text
 
 MAX_ACCOUNTS = 10_000
 USERNAME_MAX_LENGTH = 150
@@ -42,7 +42,8 @@ def register_account(username, password, request=None):
 
     try:
         with cache.lock("registration", timeout=30, blocking_timeout=2):
-            return _atomic(work)
+            with transaction.atomic():
+                return work()
     except IntegrityError:
         raise Failure("conflict", gettext("This username is already taken.")) from None
 

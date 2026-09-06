@@ -31,6 +31,31 @@ def test_empty_fingerprint_rejected(customer_api, redeemed):
     assert Device.objects.count() == 0
 
 
+def test_empty_display_name_rejected_at_http_boundary(api, customer_api, redeemed):
+    entitlement, key = redeemed
+    assert (
+        customer_api.post(
+            f"me/entitlements/{entitlement.pk}/devices", {"device_fingerprint": "m1", "display_name": ""}
+        ).status_code
+        == 400
+    )
+    assert (
+        api.post("activate", {"license_key": key, "device_fingerprint": "m1", "display_name": ""}).status_code
+        == 400
+    )
+    assert Device.objects.count() == 0
+    device = customer_api.json(
+        customer_api.post(f"me/entitlements/{entitlement.pk}/devices", {"device_fingerprint": "m1"})
+    )["device"]
+    assert customer_api.patch(f"me/devices/{device['device_id']}", {"display_name": ""}).status_code == 400
+    assert (
+        customer_api.client.post(
+            f"/ui/devices/{device['device_id']}/rename", {"display_name": ""}
+        ).status_code
+        == 400
+    )
+
+
 def test_oversized_fingerprint_rejected(customer_api, redeemed):
     entitlement, _ = redeemed
     response = customer_api.post(

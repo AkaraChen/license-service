@@ -20,8 +20,8 @@ class RedeemForm(forms.Form):
 class DeviceNameForm(forms.Form):
     display_name = forms.CharField(
         label=_("Name"),
-        required=False,
         strip=False,
+        min_length=1,
         max_length=200,
         widget=forms.TextInput(attrs={"x-ref": "name"}),
     )

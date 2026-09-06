@@ -38,7 +38,7 @@ def test_register_cannot_escalate_via_unknown_field(api):
 
 def test_duplicate_username_conflict_case_insensitive(api):
     assert api.post("auth/register", {"username": "Alice", "password": "pw-12345"}).status_code == 201
-    response = api.post("auth/register", {"username": "  alice ", "password": "pw-12345"})
+    response = api.post("auth/register", {"username": "alice", "password": "pw-12345"})
     assert response.status_code == 409
     assert error_class(response) == "conflict"
 

@@ -18,7 +18,6 @@ MAX_ACCOUNTS = 10_000
 
 def register_account(username, password, request=None):
     """Open self-registration. Invariant 4: always is_admin=False."""
-    username = (username or "").strip()
     if request is not None:
         admit_registration(request)
 

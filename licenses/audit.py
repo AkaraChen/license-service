@@ -1,9 +1,11 @@
-"""Shared, bounded audit records for JSON, HTML and Django Admin adapters."""
+"""Request audit and the existing JSON browser policy for all HTTP adapters."""
 
 import json
 import logging
 import re
 import uuid
+
+from django.http import JsonResponse
 
 log = logging.getLogger("licenses.api")
 
@@ -35,8 +37,17 @@ class AuditMiddleware:
         request.audit_context = {"rid": request_id(request), "actor": "anonymous"}
         if user.is_authenticated:
             request.audit_context.update(actor="admin" if user.is_staff else "customer", account_id=user.pk)
+        is_api = request.path.startswith("/api/")
+        if request.path in {"/api/activate", "/api/validate"}:
+            request.audit_context["actor"] = "application"
         response = self.get_response(request)
-        if request.method not in {"POST", "PATCH", "DELETE"} or request.path.startswith("/api/"):
+        if request.path.startswith("/api/") and response.status_code == 405:
+            return JsonResponse(
+                {"error": "validation_error", "message": "Method not allowed."},
+                status=405,
+                headers={"Allow": response.get("Allow", "")},
+            )
+        if request.method not in {"POST", "PATCH", "DELETE"}:
             return response
         match = request.resolver_match
         if match is None:
@@ -68,5 +79,22 @@ class AuditMiddleware:
         object_id = match.kwargs.get("object_id", "")
         if str(object_id).isdigit():
             context["object_id"] = int(object_id)
-        emit(match.view_name, context)
+        if is_api:
+            context.update(method=request.method, path=request.path)
+        emit(match.url_name if is_api else match.view_name, context)
         return response
+
+    def process_view(self, request, view, args, kwargs):
+        # SPEC's JSON clients use same-origin checks instead of CSRF tokens.
+        if not request.path.startswith("/api/") or request.method not in {"POST", "PATCH"}:
+            return None
+        from .http import api_error
+        from .services import Failure
+
+        origin = request.headers.get("Origin")
+        if request.path not in {"/api/activate", "/api/validate"} and origin is not None:
+            if origin != f"{request.scheme}://{request.get_host()}":
+                return api_error(request, Failure("forbidden", "Cross-origin writes are not allowed."))
+        if request.content_type != "application/json":
+            return api_error(request, Failure("validation_error", "Write bodies must be application/json."))
+        return None

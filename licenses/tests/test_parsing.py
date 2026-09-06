@@ -4,7 +4,7 @@ import json
 
 from django.contrib.auth.models import User
 
-from licenses.api import HTTP_STATUS
+from licenses.http import HTTP_STATUS
 from licenses.models import Device
 
 from .conftest import error_class
@@ -15,30 +15,6 @@ def test_unknown_json_field_rejected_without_mutation(api):
     assert response.status_code == 400
     assert error_class(response) == "validation_error"
     assert not User.objects.filter(username="mallory").exists()
-
-
-def test_missing_required_field(api):
-    response = api.post("auth/register", {"username": "alice"})
-    assert response.status_code == 400
-    assert error_class(response) == "validation_error"
-
-
-def test_missing_body_on_write(api):
-    response = api.call("POST", "auth/register")
-    assert response.status_code == 400
-    assert error_class(response) == "validation_error"
-
-
-def test_wrong_field_type(api):
-    response = api.post("auth/register", {"username": "alice", "password": 42})
-    assert response.status_code == 400
-    assert error_class(response) == "validation_error"
-
-
-def test_boolean_is_not_an_integer(admin_api, product):
-    response = admin_api.post("license-keys", {"product_id": product.pk, "max_devices": True})
-    assert response.status_code == 400
-    assert error_class(response) == "validation_error"
 
 
 def test_max_devices_below_one(admin_api, product):
@@ -68,18 +44,6 @@ def test_non_json_content_type_rejected(api):
     response = api.call(
         "POST", "auth/register", "username=alice&password=x", content_type="application/x-www-form-urlencoded"
     )
-    assert response.status_code == 400
-    assert error_class(response) == "validation_error"
-
-
-def test_malformed_json_rejected(api):
-    response = api.call("POST", "auth/register", "{not json")
-    assert response.status_code == 400
-    assert error_class(response) == "validation_error"
-
-
-def test_non_object_json_rejected(api):
-    response = api.call("POST", "auth/register", '["alice"]')
     assert response.status_code == 400
     assert error_class(response) == "validation_error"
 

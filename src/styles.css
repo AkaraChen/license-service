@@ -155,6 +155,53 @@
     @apply bg-danger-soft;
   }
 
+  .btn-danger-solid {
+    @apply h-10 border-danger bg-danger text-surface;
+  }
+
+  .btn-danger-solid:hover {
+    @apply border-danger bg-danger text-surface;
+    filter: brightness(0.92);
+  }
+
+  .dialog {
+    @apply rounded-md border border-line bg-surface p-6 font-sans text-ink;
+    margin: auto;
+    width: min(400px, calc(100vw - 32px));
+    box-shadow: 0 1px 1px rgb(0 0 0 / 0.02), 0 8px 16px -4px rgb(0 0 0 / 0.04),
+      0 24px 32px -8px rgb(0 0 0 / 0.06);
+  }
+
+  .dialog:focus {
+    outline: none;
+  }
+
+  .dialog::backdrop {
+    background: rgb(0 0 0 / 0.32);
+  }
+
+  .dialog-head {
+    @apply mb-4 flex items-start gap-3;
+  }
+
+  .dialog-icon {
+    @apply text-[20px] leading-none text-ink;
+  }
+
+  .dialog-title {
+    @apply text-base leading-6 font-semibold tracking-tight;
+  }
+
+  .dialog-actions {
+    @apply mt-6 flex items-center justify-end gap-2;
+  }
+
+  .dialog-actions .btn,
+  .dialog-actions .btn-primary,
+  .dialog-actions .btn-danger-solid {
+    @apply h-8;
+  }
+
   .link {
     @apply text-accent no-underline;
   }
@@ -171,14 +218,20 @@
     @apply rounded-sm border border-danger/20 bg-danger-soft px-3 py-2 text-sm text-danger;
   }
 
-  .row {
-    @apply flex flex-col gap-3 px-5 py-4 last:border-b-0 sm:flex-row sm:items-center sm:justify-between;
-    border-bottom: 1px solid var(--color-line);
-    transition: background-color 150ms var(--ease-geist);
+  .card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 16px;
   }
 
-  .row:hover {
-    @apply bg-canvas;
+  .card {
+    @apply rounded-md border border-line bg-surface p-5 text-ink no-underline;
+    box-shadow: 0 2px 2px rgb(0 0 0 / 0.04);
+    transition: background-color 150ms var(--ease-geist), border-color 150ms var(--ease-geist);
+  }
+
+  a.card:hover {
+    @apply border-line-strong bg-canvas text-ink no-underline;
   }
 
   .pill {

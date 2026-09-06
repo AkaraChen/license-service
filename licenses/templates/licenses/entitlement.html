@@ -1,5 +1,11 @@
 {% extends "licenses/base.html" %}
 {% load i18n %}
+{% block extra_head %}
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.2/src/regular/style.css">
+{% endblock %}
+{% block extra_js %}
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js"></script>
+{% endblock %}
 {% block content %}
 <div class="page-head">
   <div>
@@ -13,32 +19,51 @@
   </div>
 </div>
 {% if devices %}
-<div class="panel p-0">
+<div class="card-grid">
   {% for d in devices %}
-  <div class="row">
-    <div class="min-w-0">
-      <div class="text-[15px] font-medium tracking-tight">{% if d.display_name %}{{ d.display_name }}{% else %}<span class="mono">{{ d.device_fingerprint }}</span>{% endif %}</div>
-      <div class="meta mt-1.5 flex flex-wrap items-center gap-2">
-        <span class="pill">{{ d.get_status_display }}</span>
-        <span>{{ d.bound_at }}</span>
-        {% if d.display_name %}
-          <span class="mono">{{ d.device_fingerprint }}</span>
-        {% endif %}
-      </div>
+  {% with label=d.display_name|default:d.device_fingerprint %}
+  <div class="card" x-data>
+    <div class="text-[15px] font-medium tracking-tight">{% if d.display_name %}{{ d.display_name }}{% else %}<span class="mono">{{ d.device_fingerprint }}</span>{% endif %}</div>
+    <div class="mt-3 flex flex-wrap items-center gap-2">
+      <span class="pill">{{ d.get_status_display }}</span>
     </div>
+    <div class="meta mt-3">{{ d.bound_at }}</div>
     {% if d.status == "bound" %}
-    <div class="flex flex-wrap items-center gap-2">
-      <form method="post" action="{% url 'ui_rename_device' device_id=d.pk %}" class="flex items-center gap-2">
-        {% csrf_token %}
-        <input name="display_name" value="{{ d.display_name|default:'' }}" class="input h-8 w-36">
-        <button type="submit" class="btn">{% trans "Rename" %}</button>
-      </form>
-      <form method="post" action="{% url 'ui_unbind_device' device_id=d.pk %}">
-        {% csrf_token %}<button type="submit" class="btn btn-danger">{% trans "Unbind" %}</button>
-      </form>
+    <div class="mt-5 flex gap-2">
+      <button type="button" class="btn" @click="$refs.rename.showModal(); $nextTick(() => $refs.name.focus())">{% trans "Rename" %}</button>
+      <button type="button" class="btn btn-danger" @click="$refs.unbind.showModal()">{% trans "Unbind" %}</button>
     </div>
+    <dialog class="dialog" x-ref="rename" @click.self="$el.close()">
+      <form method="post" action="{% url 'ui_rename_device' device_id=d.pk %}">
+        {% csrf_token %}
+        <div class="dialog-head">
+          <i class="ph ph-pencil-simple dialog-icon" aria-hidden="true"></i>
+          <h2 class="dialog-title">{% trans "Rename" %}</h2>
+        </div>
+        <label class="field"><span>{% trans "Name" %}</span><input x-ref="name" name="display_name" value="{{ d.display_name|default:'' }}" required></label>
+        <div class="dialog-actions">
+          <button type="button" class="btn" @click="$refs.rename.close()">{% trans "Cancel" %}</button>
+          <button type="submit" class="btn btn-primary">{% trans "Rename" %}</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog class="dialog" x-ref="unbind" @click.self="$el.close()">
+      <form method="post" action="{% url 'ui_unbind_device' device_id=d.pk %}">
+        {% csrf_token %}
+        <div class="dialog-head">
+          <i class="ph ph-link-break dialog-icon" aria-hidden="true"></i>
+          <h2 class="dialog-title">{% trans "Unbind" %}</h2>
+        </div>
+        <p class="meta">{% blocktrans %}Unbind {{ label }}?{% endblocktrans %}</p>
+        <div class="dialog-actions">
+          <button type="button" class="btn" @click="$refs.unbind.close()">{% trans "Cancel" %}</button>
+          <button type="submit" class="btn btn-danger-solid">{% trans "Unbind" %}</button>
+        </div>
+      </form>
+    </dialog>
     {% endif %}
   </div>
+  {% endwith %}
   {% endfor %}
 </div>
 {% else %}

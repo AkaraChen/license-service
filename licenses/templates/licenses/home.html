@@ -6,20 +6,16 @@
   <a href="{% url 'ui_redeem' %}" class="btn btn-primary">{% trans "Redeem a key" %}</a>
 </div>
 {% if entitlements %}
-<div class="panel p-0">
+<div class="card-grid">
   {% for e in entitlements %}
-  <div class="row">
-    <div class="min-w-0">
-      <div class="text-[15px] font-medium tracking-tight">{{ e.product.name }}</div>
-      <div class="meta mt-1.5 flex flex-wrap items-center gap-2">
-        <span class="pill">{{ e.get_status_display }}</span>
-        <span>{% trans "Seats" %} {{ e.max_devices }}</span>
-        <span class="text-ink-muted">·</span>
-        <span>{% trans "Expires" %} {% if e.expires_at %}{{ e.expires_at }}{% else %}{% trans "never" %}{% endif %}</span>
-      </div>
+  <a href="{% url 'ui_entitlement' entitlement_id=e.pk %}" class="card">
+    <div class="text-[15px] font-medium tracking-tight">{{ e.product.name }}</div>
+    <div class="mt-3 flex flex-wrap items-center gap-2">
+      <span class="pill">{{ e.get_status_display }}</span>
+      <span class="meta">{% trans "Seats" %} {{ e.max_devices }}</span>
     </div>
-    <a href="{% url 'ui_entitlement' entitlement_id=e.pk %}" class="btn shrink-0">{% trans "Manage devices" %}</a>
-  </div>
+    <div class="meta mt-3">{% trans "Expires" %} {% if e.expires_at %}{{ e.expires_at }}{% else %}{% trans "never" %}{% endif %}</div>
+  </a>
   {% endfor %}
 </div>
 {% else %}

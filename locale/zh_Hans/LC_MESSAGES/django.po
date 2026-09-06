@@ -142,6 +142,12 @@ msgstr "解绑"
 msgid "Rename"
 msgstr "重命名"
 
+msgid "Cancel"
+msgstr "取消"
+
+msgid "Unbind %(label)s?"
+msgstr "要解绑 %(label)s 吗？"
+
 msgid "Bind a new device"
 msgstr "绑定新设备"
 

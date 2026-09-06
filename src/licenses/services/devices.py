@@ -1,6 +1,5 @@
 from django.db import transaction
 from django.utils import timezone
-from django.utils.translation import gettext
 
 from ..models import Entitlement, LicenseKey
 from .errors import (
@@ -20,11 +19,11 @@ DEVICE_HISTORY_LIMIT = 100
 def check_active(entitlement):
     """Section 7.5 step 2 / 7.7: status and expiry gate for bind and validate."""
     if entitlement.status == "suspended":
-        raise EntitlementSuspended(gettext("This entitlement is suspended."))
+        raise EntitlementSuspended()
     if entitlement.status == "revoked":
-        raise EntitlementRevoked(gettext("This entitlement has been revoked."))
+        raise EntitlementRevoked()
     if entitlement.expires_at is not None and timezone.now() > entitlement.expires_at:
-        raise EntitlementExpired(gettext("This entitlement has expired."))
+        raise EntitlementExpired()
 
 
 def bind(entitlement, fingerprint, display_name=None, *, source_key_id=None):
@@ -34,18 +33,18 @@ def bind(entitlement, fingerprint, display_name=None, *, source_key_id=None):
         if source_key_id is not None:
             key = LicenseKey.objects.select_for_update().get(pk=source_key_id)
             if key.status == "revoked":
-                raise KeyRevoked(gettext("This license key has been revoked."))
+                raise KeyRevoked()
             if key.status != "redeemed":
-                raise UnknownKey(gettext("This license key is not recognized."))
+                raise UnknownKey()
         locked = Entitlement.objects.select_for_update().get(pk=entitlement.pk)
         if source_key_id is not None and locked.source_key_id != source_key_id:
-            raise UnknownKey(gettext("This license key is not recognized."))
+            raise UnknownKey()
         check_active(locked)
         existing = locked.devices.filter(device_fingerprint=fingerprint, status="bound").first()
         if existing is not None:
             return existing, False
         if locked.devices.filter(status="bound").count() >= locked.max_devices:
-            raise SeatExhausted(gettext("This entitlement has no remaining device seats."))
+            raise SeatExhausted()
         from licenses import services as license_services
 
         budget = max(license_services.DEVICE_HISTORY_LIMIT, locked.max_devices)
@@ -74,12 +73,12 @@ def resolve_redeemed_key(plaintext):
     reports unknown_key so key existence is not leaked before redeem."""
     key = LicenseKey.objects.filter(key_hash=hash_key(plaintext)).first()
     if key is None or key.status == "issued":
-        raise UnknownKey(gettext("This license key is not recognized."))
+        raise UnknownKey()
     if key.status == "revoked":
-        raise KeyRevoked(gettext("This license key has been revoked."))
+        raise KeyRevoked()
     entitlement = getattr(key, "entitlement", None)
     if entitlement is None:
-        raise UnknownKey(gettext("This license key is not recognized."))
+        raise UnknownKey()
     return key, entitlement
 
 
@@ -89,7 +88,7 @@ def validate(plaintext, fingerprint):
     check_active(entitlement)
     device = entitlement.devices.filter(device_fingerprint=fingerprint, status="bound").first()
     if device is None:
-        raise UnknownDevice(gettext("No bound device matches this fingerprint."))
+        raise UnknownDevice()
     return device
 
 

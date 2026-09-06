@@ -176,10 +176,9 @@ The Django app lives in `src/licenses` with MTV in three packages: `models/`,
 stays in `src/licenses/admin.py`.
 Django Ninja routers in `src/licenses/views/api.py` declare the 25 machine operations.
 Pydantic request schemas live in `src/licenses/views/schemas.py`. SPEC error
-classes are raiseable types in `src/licenses/services/errors.py`; one Ninja
-handler in `views/api.py` serializes `{"error","message"}` from `exc.code` and
-`exc.status`. Views log mutations with the stdlib logger; `JsonWritePolicyMiddleware`
-keeps the JSON
+classes in `src/licenses/services/errors.py` subclass Ninja `HttpError`; the
+`{"error","message"}` envelope is `Failure.envelope()` / `Failure.as_response()`.
+Views log mutations with the stdlib logger; `JsonWritePolicyMiddleware` keeps the JSON
 same-origin + Content-Type write policy and the `/api/` 405 envelope. Ninja
 generates `/openapi.json` and `/docs`. There is no operation registry, custom JSON
 type parser or OpenAPI builder.

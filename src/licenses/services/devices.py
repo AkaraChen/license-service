@@ -3,7 +3,7 @@ from django.utils import timezone
 from django.utils.translation import gettext
 
 from ..models import Entitlement, LicenseKey
-from .errors import Failure, validate_text
+from .errors import Failure
 from .keys import hash_key
 
 DEVICE_HISTORY_LIMIT = 100

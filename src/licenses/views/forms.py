@@ -1,12 +1,15 @@
 """Customer HTML input fields; licensing mutations remain in services."""
 
 from django import forms
+from django.contrib.auth.forms import UserCreationForm
+from django.contrib.auth.models import User
 from django.utils.translation import gettext_lazy as _
 
 
-class RegistrationForm(forms.Form):
-    username = forms.CharField(label=_("Username"), max_length=150)
-    password = forms.CharField(label=_("Password"), strip=False, max_length=1024, widget=forms.PasswordInput)
+class RegistrationForm(UserCreationForm):
+    class Meta(UserCreationForm.Meta):
+        model = User
+        fields = ("username",)
 
 
 class RedeemForm(forms.Form):

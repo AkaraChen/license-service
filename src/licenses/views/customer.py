@@ -42,7 +42,9 @@ def register_page(request):
     form = RegistrationForm(request.POST if request.method == "POST" else None)
     if form.is_valid():
         try:
-            user = accounts.register_account(**form.cleaned_data, request=request)
+            user = accounts.register_account(
+                form.cleaned_data["username"], form.cleaned_data["password1"], request=request
+            )
         except Failure as exc:
             log.warning("register", extra={"outcome": exc.code})
             form.add_error(None, exc.message)

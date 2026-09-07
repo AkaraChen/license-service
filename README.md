@@ -61,8 +61,9 @@ also rejects an unreachable database (`licenses.E002`).
   documented, never a secret), `is_admin = User.is_staff`, `created_at = date_joined`.
   One Account type for Admin and Customer. Admin bootstrap: `createsuperuser` only.
 - **Password hash**: PBKDF2-SHA256 (Django default `PASSWORD_HASHERS`).
-- **Session mechanism**: Django server-side sessions stored in the License Store DB
-  (durable across restarts), cookie name `sessionid`, HttpOnly.
+- **Session mechanism**: `django-user-sessions` in the License Store DB
+  (durable across restarts), cookie name `sessionid`, HttpOnly. Sessions
+  have a user FK so deactivation deletes by queryset.
 - **Store engines**: SQLite (default) and PostgreSQL, via the Django ORM. Core
   Conformance runs on SQLite; PostgreSQL is supported through the same ORM layer
   (run the suite with `LICENSE_DATABASE_URL=postgresql://…` for the Real Integration

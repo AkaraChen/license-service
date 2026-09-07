@@ -192,6 +192,18 @@ wheels = [
 ]
 
 [[package]]
+name = "django-user-sessions"
+version = "2.0.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "django" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/1a/0c/5141b66fd97de064d3853335aada2524c8cd05e5e17b118de3ef3ca355e3/django-user-sessions-2.0.0.tar.gz", hash = "sha256:41b8b1ebeb4736065efbc96437c9cfbf491c39e10fd547a76b98f2312e11fa3e", size = 110970, upload-time = "2022-12-13T14:20:30.111Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/78/f4/fab7937669540636bacd421cf30adbbfa8dc41a2f84f175e8fc133907776/django_user_sessions-2.0.0-py3-none-any.whl", hash = "sha256:0965554279f556b47062965609fa08b3ae45bbc581001dbe84b2ea599cc67748", size = 38676, upload-time = "2022-12-13T14:20:14.357Z" },
+]
+
+[[package]]
 name = "iniconfig"
 version = "2.3.0"
 source = { registry = "https://pypi.org/simple" }
@@ -214,6 +226,7 @@ dependencies = [
     { name = "django-redis" },
     { name = "django-tailwind-cli" },
     { name = "django-unfold" },
+    { name = "django-user-sessions" },
     { name = "pydantic" },
     { name = "pytest" },
     { name = "pytest-django" },
@@ -235,6 +248,7 @@ requires-dist = [
     { name = "django-redis", specifier = ">=5.4,<7" },
     { name = "django-tailwind-cli", specifier = ">=4.8.0" },
     { name = "django-unfold", specifier = ">=0.105.0" },
+    { name = "django-user-sessions", specifier = ">=2,<3" },
     { name = "pydantic", specifier = ">=2.11,<3" },
     { name = "pytest", specifier = ">=8.0" },
     { name = "pytest-django", specifier = ">=4.8" },

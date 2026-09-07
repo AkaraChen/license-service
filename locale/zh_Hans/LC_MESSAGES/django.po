@@ -1,10 +1,10 @@
-# License Service Simplified Chinese.
+# Shukka License Simplified Chinese.
 # Copyright (C) 2026
-# This file is distributed under the same license as the license-service package.
+# This file is distributed under the same license as the shukka-license package.
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: license-service 0.1.0\n"
+"Project-Id-Version: shukka-license 0.1.0\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2026-09-05 16:36+0000\n"
 "PO-Revision-Date: 2026-09-06 00:36+0800\n"
@@ -85,8 +85,8 @@ msgstr "此授权已无剩余设备席位。"
 msgid "No bound device matches this fingerprint."
 msgstr "没有已绑定设备匹配此指纹。"
 
-msgid "License Service"
-msgstr "许可证服务"
+msgid "Shukka License"
+msgstr "Shukka License"
 
 #, python-format
 msgid "Signed in as <strong class=\"text-ink\">%(username)s</strong>"

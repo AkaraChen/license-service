@@ -1,5 +1,5 @@
 [project]
-name = "license-service"
+name = "shukka-license"
 version = "0.1.0"
 description = "Single-tenant license key service"
 requires-python = ">=3.12"

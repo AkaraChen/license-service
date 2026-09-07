@@ -1,4 +1,4 @@
-# License Service
+# Shukka License
 #
 #   just serve        start locally with Tailwind watcher (default 127.0.0.1:8000)
 #   just css          rebuild production CSS

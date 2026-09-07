@@ -1,4 +1,4 @@
-"""License Service app.
+"""Shukka License app.
 
 MTV lives in three packages:
 

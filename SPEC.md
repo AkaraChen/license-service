@@ -1,4 +1,4 @@
-# License Service Specification
+# Shukka License Specification
 
 Status: Draft v3 (language-agnostic, agent-agnostic)
 
@@ -17,7 +17,7 @@ behavior.
 
 ## 1. Problem Statement
 
-The License Service is a long-running HTTP process. It serves a machine HTTP API, a published
+The Shukka License is a long-running HTTP process. It serves a machine HTTP API, a published
 OpenAPI document, human-readable API documentation, and a first-party HTML UI (Admin console
 and Customer self-service pages). One deployment licenses the operator's own Products. People
 register as Customer Accounts, redeem Admin-issued License Keys, and manage Devices bound to

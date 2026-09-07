@@ -1,6 +1,8 @@
-# License Service (Django)
+# Shukka License
 
-A single-tenant license key service implementing `SPEC.md` (Draft v3) on the Django
+Part of [Shukka](https://github.com/shukka-app), Shukka License manages software license keys, entitlements, and device activations.
+
+A self-hosted, single-tenant license key service implementing `SPEC.md` (Draft v3) on the Django
 ecosystem: Django framework + ORM as the engine-agnostic License Store, Django Admin as
 the Admin console, first-party Customer HTML pages, a JSON machine API, and an OpenAPI
 document — all served by one process.
@@ -40,7 +42,7 @@ docker compose -f compose.production.yaml exec app python manage.py createsuperu
 ```
 
 需要 Docker Compose v2 或更新版本。开发用的 `compose.yaml` 仍然只启动 Redis；生产请显式使用
-`compose.production.yaml`。也可以用 `docker build -t license-service:local .` 单独构建镜像。
+`compose.production.yaml`。也可以用 `docker build -t shukka-license:local .` 单独构建镜像。
 
 应用监听宿主机 `127.0.0.1:8000`，由宿主机现有的 HTTPS 反向代理转发，保留 `Host` 并覆盖设置
 `X-Forwarded-Proto: https`。应用保留生产 HTTPS 重定向和安全 Cookie 设置，直接用 HTTP 访问会跳转。
@@ -74,7 +76,7 @@ Compose 每 30 秒探测一次，超时 5 秒，启动宽限 30 秒，连续失�
 ```bash
 docker compose -f compose.production.yaml logs --tail=100 app
 docker stats --no-stream
-docker image ls license-service                              # 内容大小与本地磁盘占用
+docker image ls shukka-license                              # 内容大小与本地磁盘占用
 docker compose -f compose.production.yaml down                 # 停止，保留数据卷
 ```
 
@@ -82,7 +84,7 @@ docker compose -f compose.production.yaml down                 # 停止，保留
 
 GitHub Actions 工作流 `.github/workflows/docker-publish.yml` 在推送 `main`、推送 `v*` 标签或
 手动触发（main / v* 标签）时构建并上传镜像到 `ghcr.io/<仓库所有者>/<仓库名>`，名称自动转为小写。
-本仓库地址为 `ghcr.io/akarachen/license-service`。
+本仓库地址为 `ghcr.io/shukka-app/shukka-license`。
 
 - `main` 发布 `latest` 和完整提交 SHA 标签。
 - 例如 `v1.0.0` 标签发布同名镜像标签和完整提交 SHA，不覆盖 `latest`。
@@ -95,7 +97,7 @@ GitHub Actions 工作流 `.github/workflows/docker-publish.yml` 在推送 `main`
 详见 [GitHub Container registry 文档](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry)。
 
 ```bash
-docker pull ghcr.io/akarachen/license-service:latest
+docker pull ghcr.io/shukka-app/shukka-license:latest
 # 生产部署建议使用已成功发布的完整提交 SHA，避免 latest 后续改变。
 ```
 
@@ -122,7 +124,7 @@ SQLite and Redis defaults. Restart after changing environment variables.
 Registration limits are fixed at 5 attempts per peer/hour and 100 globally/hour.
 Public registration stops at 10,000 accounts; device history retains 100 rows per
 entitlement, or its seat limit if larger. All cache users share Redis with the
-`license-service` prefix; separate deployments should use separate Redis databases.
+`license-service` prefix (retained for compatibility across the Shukka License rename); separate deployments should use separate Redis databases.
 
 `LICENSE_DATABASE_URL` replaces the previous `LICENSE_STORE_*` variables; for
 PostgreSQL, use `postgresql://user:password@host:5432/licenses` and install

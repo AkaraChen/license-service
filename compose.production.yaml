@@ -1,7 +1,7 @@
 services:
   app:
     build: .
-    image: license-service:local
+    image: shukka-license:local
     environment:
       LICENSE_SESSION_SECRET: ${LICENSE_SESSION_SECRET:?Set LICENSE_SESSION_SECRET in .env}
       LICENSE_ALLOWED_HOSTS: ${LICENSE_ALLOWED_HOSTS:?Set LICENSE_ALLOWED_HOSTS in .env}

@@ -34,7 +34,10 @@ python3 -c 'import secrets; print(secrets.token_urlsafe(48))'
 | `x-server` | 服务器公网 IP |
 | `x-domain` | 实际域名 |
 | `x-registry-user` | GitHub 登录名 |
-| `image` | 小写的 `用户名或组织名/license-service`，不含 `ghcr.io/` 前缀 |
+| `image` | 小写的 `用户名或组织名/shukka-license`，不含 `ghcr.io/` 前缀 |
+
+默认镜像路径为 `shukka-app/shukka-license`。`service: license-service`、Redis 主机名和数据卷名称
+保留旧标识，以便现有安装继续使用原有数据和部署身份。品牌更名不需要重命名这些资源。
 
 默认 `builder.arch: amd64`。如果服务器是 ARM64，改为 `arm64`；本地 Docker 需要能构建对应架构。
 如果 SSH 用户不是 root，可增加 `ssh.user`，并提前安装 Docker、配置该用户的 Docker 管理权限。
@@ -58,7 +61,7 @@ Redis accessory 独立管理，普通 `kamal deploy` 不会更新它，参见
 ## 直接部署 Actions 已发布的镜像
 
 等 GitHub Actions 的 **Publish Docker image** 成功后，可以跳过本地构建。
-把 `image` 设置为实际镜像路径，例如本仓库的 `akarachen/license-service`，`registry.server` 保持 `ghcr.io`。
+把 `image` 设置为实际镜像路径，例如本仓库的 `shukka-app/shukka-license`，`registry.server` 保持 `ghcr.io`。
 `registry.username` 填写有拉取权限的 GitHub 用户，`.kamal/secrets` 中的 registry token 只需具有所需读取权限；
 它与 Actions 自动获得的 `GITHUB_TOKEN` 是两套凭据。
 

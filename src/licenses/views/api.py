@@ -42,7 +42,7 @@ class LicenseAPI(NinjaAPI):
         return operation.view_func.__name__
 
 
-api = LicenseAPI(title="License Service", version="3.0.0", openapi_url="/openapi.json", docs_url="/docs")
+api = LicenseAPI(title="Shukka License", version="3.0.0", openapi_url="/openapi.json", docs_url="/docs")
 
 
 @api.exception_handler(Failure)

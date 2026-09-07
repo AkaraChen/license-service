@@ -4,7 +4,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}{% trans "License Service" %}{% endblock %}</title>
+  <title>{% block title %}{% trans "Shukka License" %}{% endblock %}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -14,7 +14,7 @@
 <body class="{% block body_class %}{% endblock %}">
   <header class="sticky top-0 z-10 border-b border-line bg-surface">
     <div class="shell-bar">
-      <a href="{% url 'ui_home' %}" class="brand">{% trans "License Service" %}</a>
+      <a href="{% url 'ui_home' %}" class="brand">{% trans "Shukka License" %}</a>
       {% if user.is_authenticated %}
         <nav class="order-last flex w-full min-w-0 items-center gap-0.5 sm:order-none sm:w-auto sm:flex-1">
           <a href="{% url 'ui_home' %}" class="nav-link{% if request.resolver_match.url_name == 'ui_home' or request.resolver_match.url_name == 'ui_entitlement' %} is-current{% endif %}">{% trans "My entitlements" %}</a>

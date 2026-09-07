@@ -132,8 +132,8 @@ AXES_RESET_COOL_OFF_ON_FAILURE_DURING_LOCKOUT = False
 RATELIMIT_VIEW = "licenses.accounts.ratelimited"
 # Admin theme matches the customer pages: Geist, grayscale surface, one blue accent.
 UNFOLD = {
-    "SITE_TITLE": "License Service",
-    "SITE_HEADER": "License Service",
+    "SITE_TITLE": "Shukka License",
+    "SITE_HEADER": "Shukka License",
     "SITE_URL": "/admin/",
     "SITE_SYMBOL": "key",
     "THEME": "light",

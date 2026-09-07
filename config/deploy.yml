@@ -3,8 +3,9 @@ x-server: &server 192.0.2.10
 x-domain: &domain license.example.com
 x-registry-user: &registry-user your-github-username
 
+# Retain the deployment identity and volume names for existing installations.
 service: license-service
-image: your-github-username/license-service
+image: shukka-app/shukka-license
 minimum_version: 2.12.0
 
 servers:

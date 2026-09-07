@@ -22,3 +22,15 @@ def health(request):
     except Exception:  # noqa: BLE001 - dependency failures must produce a generic 503
         return JsonResponse({"status": "unavailable"}, status=503)
     return JsonResponse({"status": "ok"})
+
+
+class HealthcheckMiddleware:
+    """Allow internal Kamal probes before Host-dependent middleware runs."""
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        if request.path_info == "/healthz":
+            return health(request)
+        return self.get_response(request)

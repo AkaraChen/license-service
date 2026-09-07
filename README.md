@@ -78,6 +78,12 @@ docker image ls license-service                              # 内容大小与�
 docker compose -f compose.production.yaml down                 # 停止，保留数据卷
 ```
 
+## Kamal（单服务器部署）
+
+已提供 `config/deploy.yml` 和 `.kamal/secrets.example`，复用精简镜像、SQLite 和同机 Redis，
+由 Kamal 管理 HTTPS。填写服务器、域名、镜像仓库和密钥后即可 `kamal setup`，
+完整步骤见 [Kamal 部署说明](docs/kamal.md)。
+
 ## Configuration (SPEC Section 6)
 
 Deployment needs only a production secret and allowed hosts when using the local

@@ -8,3 +8,5 @@ staticfiles/
 .env
 .env.*
 !.env.example
+.kamal/secrets*
+!.kamal/secrets.example

@@ -34,3 +34,20 @@ def test_health_dependency_failures_return_generic_503(dependency):
 def test_health_detects_cache_roundtrip_failure():
     with patch("licenses.views.health.cache.get", return_value=None):
         assert Client().get("/healthz").status_code == 503
+
+
+@pytest.mark.django_db
+def test_kamal_internal_probe_does_not_relax_business_host_validation():
+    from django.conf import settings
+
+    middleware = ["licenses.views.health.HealthcheckMiddleware", *settings.MIDDLEWARE]
+    with override_settings(MIDDLEWARE=middleware, SECURE_SSL_REDIRECT=True):
+        client = Client()
+        assert client.get("/healthz", HTTP_HOST="a1b2c3d4e5f6:8000").status_code == 200
+        assert client.get("/ui/login", HTTP_HOST="a1b2c3d4e5f6:8000").status_code == 400
+        assert client.get("/ui/login").status_code == 301
+        assert client.post("/healthz").status_code == 405
+        with patch("licenses.views.health.cache.set", side_effect=RuntimeError("private")):
+            response = client.get("/healthz", HTTP_HOST="a1b2c3d4e5f6:8000")
+        assert response.status_code == 503
+        assert response.json() == {"status": "unavailable"}

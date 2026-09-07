@@ -1,0 +1,83 @@
+# Edit the four values below. This profile deploys to ONE server.
+x-server: &server 192.0.2.10
+x-domain: &domain license.example.com
+x-registry-user: &registry-user your-github-username
+
+service: license-service
+image: your-github-username/license-service
+minimum_version: 2.12.0
+
+servers:
+  web:
+    hosts:
+      - *server
+    options:
+      read-only: true
+      tmpfs: /tmp:size=32m,mode=1777
+      cap-drop: ALL
+      security-opt: no-new-privileges:true
+      memory: 256m
+      cpus: 1
+      pids-limit: 64
+      health-cmd: python /app/docker/healthcheck.py
+      health-interval: 30s
+      health-timeout: 5s
+      health-start-period: 30s
+      health-retries: 3
+
+proxy:
+  ssl: true
+  host: *domain
+  app_port: 8000
+  forward_headers: false
+  healthcheck:
+    path: /healthz
+    interval: 3
+    timeout: 5
+
+registry:
+  server: ghcr.io
+  username: *registry-user
+  password:
+    - KAMAL_REGISTRY_PASSWORD
+
+# Build on the operator's machine, not on the small deployment server.
+builder:
+  arch: amd64
+
+env:
+  clear:
+    DJANGO_SETTINGS_MODULE: config.kamal
+    LICENSE_ALLOWED_HOSTS: *domain
+    LICENSE_TRUST_PROXY: "1"
+    LICENSE_REDIS_URL: redis://license-service-redis:6379/0
+    WEB_CONCURRENCY: "1"
+  secret:
+    - LICENSE_SESSION_SECRET
+
+volumes:
+  - license-service-data:/data
+
+accessories:
+  redis:
+    image: redis:7-alpine
+    host: *server
+    cmd: redis-server --appendonly yes --maxmemory 32mb --maxmemory-policy noeviction
+    volumes:
+      - license-service-redis-data:/data
+    options:
+      memory: 96m
+      cpus: 0.25
+      pids-limit: 64
+      health-cmd: redis-cli ping
+      health-interval: 10s
+      health-timeout: 3s
+      health-retries: 5
+
+retain_containers: 2
+deploy_timeout: 90
+stop_timeout: 40
+
+aliases:
+  superuser: app exec --interactive --reuse "python manage.py createsuperuser"
+  logs: app logs --follow

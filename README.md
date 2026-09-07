@@ -119,10 +119,10 @@ also rejects an unreachable database (`licenses.E002`).
 - **Registration abuse controls**: `django-ratelimit` decorators enforce shared
   source/global hourly limits before password hashing. HTML uses the package's
   middleware for the 429 response; JSON preserves its audited error envelope.
-  `django-redis` supplies a registration lock for serializing account creation and
-  checking the total account capacity. Counter updates, expiry and locking are
-  library-owned. Both packages use `REMOTE_ADDR`, ignoring forwarded client-IP
-  headers; configure the trusted edge accordingly.
+  Duplicate usernames fail on the case-insensitive unique index. Account
+  capacity is a count check before `create_user`. Both packages use
+  `REMOTE_ADDR`, ignoring forwarded client-IP headers; configure the trusted
+  edge accordingly.
 - **Redis**: all workers must use the same Redis and cache namespace. The supplied
   Compose service enables AOF and disables eviction. Redis is a required service;
   failures do not bypass the limits (JSON login/registration returns 503). Deleting

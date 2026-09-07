@@ -42,8 +42,9 @@ uv run zensical build --strict                # 或 just docs-build
 ```
 
 预览地址为 <http://127.0.0.1:8001>，可与 Django 的 8000 端口同时运行。
-文档源文件位于 `docs/`，导航和主题配置位于 `zensical.toml`，静态构建输出到 `site/`。
-新增页面时更新配置中的 `nav`；部署文档站点时设置实际 `site_url`。
+对外文档源文件位于 `docs/`（Zensical 生成站点），导航和主题配置位于 `zensical.toml`，静态构建输出到 `site/`。
+内部文档（开发、部署验证、安全修复记录）位于 `.context/`。
+新增对外页面时更新配置中的 `nav`；部署文档站点时设置实际 `site_url`。
 Django 的 `/docs` 路径继续提供交互式 API 文档。
 
 ## Docker（低资源生产部署）
@@ -120,7 +121,7 @@ docker pull ghcr.io/shukka-app/shukka-license:latest
 
 已提供 `config/deploy.yml` 和 `.kamal/secrets.example`，复用精简镜像、SQLite 和同机 Redis，
 由 Kamal 管理 HTTPS。填写服务器、域名、镜像仓库和密钥后即可 `kamal setup`，
-完整步骤见 [Kamal 部署说明](docs/kamal.md)。
+完整步骤见文档站点中的 [Kamal 部署说明](docs/kamal.md)。
 
 ## Configuration (SPEC Section 6)
 
@@ -264,7 +265,7 @@ The change also switches production defaults to HTTPS and a required secret. Set
 production environment variables before `migrate` or importing WSGI. For local use,
 follow the explicit development profile in Quickstart.
 
-See [the finding-by-finding repair and validation record](docs/security-scan-2026-09-06.md).
+See [the finding-by-finding repair and validation record](.context/security-scan-2026-09-06.md).
 
 ## Code layout and audit budget
 

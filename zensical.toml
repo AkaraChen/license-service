@@ -1,14 +1,15 @@
 [project]
 site_name = "Shukka License"
-site_description = "Shukka License 项目与部署文档"
+site_description = "Shukka License 部署与运维文档"
 docs_dir = "docs"
 site_dir = "site"
 dev_addr = "127.0.0.1:8001"
 nav = [
     { "首页" = "index.md" },
-    { "Kamal 部署" = "kamal.md" },
-    { "本机部署验证" = "kamal-local-validation.md" },
-    { "安全修复记录" = "security-scan-2026-09-06.md" },
+    { "部署概览" = "deploy.md" },
+    { "数据库" = "database.md" },
+    { "Docker" = "docker.md" },
+    { "Kamal" = "kamal.md" },
 ]
 
 [project.theme]

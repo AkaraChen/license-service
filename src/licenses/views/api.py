@@ -9,7 +9,7 @@ from django.contrib.auth.models import User
 from django.core.exceptions import RequestDataTooBig
 from django.db import IntegrityError, transaction
 from django.http import Http404, JsonResponse
-from django.shortcuts import get_object_or_404 as django_get_object_or_404
+from django.shortcuts import get_object_or_404
 from django.views.decorators.cache import never_cache
 from django_ratelimit.exceptions import Ratelimited
 from ninja import NinjaAPI, Router, Status
@@ -41,19 +41,14 @@ class LicenseAPI(NinjaAPI):
         if isinstance(exc, Failure):
             log.warning("api_error", extra={"outcome": exc.code})
             return JsonResponse(exc.envelope(), status=exc.status)
+        if isinstance(exc, Http404):
+            return JsonResponse(NotFound().envelope(), status=404)
         if isinstance(exc, (SchemaError, UnicodeError, RequestDataTooBig)):
             return JsonResponse(ValidationError().envelope(), status=400)
         return super().on_exception(request, exc)
 
 
 api = LicenseAPI(title="License Service", version="3.0.0", openapi_url="/openapi.json", docs_url="/docs")
-
-
-def get_object_or_404(klass, *args, **kwargs):
-    try:
-        return django_get_object_or_404(klass, *args, **kwargs)
-    except Http404:
-        raise NotFound() from None
 
 
 class CustomerSession(SessionAuth):

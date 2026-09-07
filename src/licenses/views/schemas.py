@@ -3,12 +3,13 @@
 from datetime import datetime
 from typing import Annotated, Literal
 
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.core.validators import ProhibitNullCharactersValidator
 from ninja import Schema
 from pydantic import BeforeValidator, ConfigDict, Field, StrictStr, TypeAdapter, field_validator
 
-from .. import services
-
 Fingerprint = Annotated[str, BeforeValidator(str.strip), Field(min_length=1, max_length=128)]
+_reject_null = ProhibitNullCharactersValidator()
 
 
 class Empty(Schema):
@@ -18,7 +19,10 @@ class Empty(Schema):
     @classmethod
     def valid_text(cls, value):
         if isinstance(value, str):
-            services.validate_text(value)
+            try:
+                _reject_null(value)
+            except DjangoValidationError as exc:
+                raise ValueError(exc.messages[0]) from None
         return value
 
 

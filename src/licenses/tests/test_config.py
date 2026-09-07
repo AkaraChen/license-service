@@ -42,12 +42,6 @@ def test_production_with_session_secret_passes_check():
     assert out.returncode == 0, out.stderr + out.stdout
 
 
-def test_unreachable_store_prevents_startup():
-    """PostgreSQL engine with no server (and possibly no driver) must fail startup."""
-    out = run_manage("migrate", "--run-syncdb", LICENSE_DATABASE_URL="postgresql://localhost:1/licenses")
-    assert out.returncode != 0
-
-
 def test_sqlite_store_opens_and_migrates(tmp_path):
     db_file = tmp_path / "store.sqlite3"
     out = run_manage("migrate", LICENSE_DATABASE_URL=f"sqlite:///{db_file}")

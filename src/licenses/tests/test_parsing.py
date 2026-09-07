@@ -14,6 +14,7 @@ from .conftest import error_class
     "fields",
     [
         {"is_admin": True},
+        {"is_staff": True},
         {"username": ""},
         {"username": "x" * 151},
         {"username": "bad/name"},
@@ -33,9 +34,12 @@ def test_max_devices_below_one(admin_api, product):
     assert error_class(response) == "validation_error"
 
 
-def test_empty_fingerprint_rejected(customer_api, redeemed):
+@pytest.mark.parametrize("fingerprint", ["   ", "x" * 129])
+def test_invalid_fingerprint_rejected(customer_api, redeemed, fingerprint):
     entitlement, _ = redeemed
-    response = customer_api.post(f"me/entitlements/{entitlement.pk}/devices", {"device_fingerprint": "   "})
+    response = customer_api.post(
+        f"me/entitlements/{entitlement.pk}/devices", {"device_fingerprint": fingerprint}
+    )
     assert response.status_code == 400
     assert error_class(response) == "validation_error"
     assert Device.objects.count() == 0
@@ -66,15 +70,6 @@ def test_empty_display_name_rejected_at_http_boundary(api, customer_api, redeeme
         ).status_code
         == 400
     )
-
-
-def test_oversized_fingerprint_rejected(customer_api, redeemed):
-    entitlement, _ = redeemed
-    response = customer_api.post(
-        f"me/entitlements/{entitlement.pk}/devices", {"device_fingerprint": "x" * 129}
-    )
-    assert response.status_code == 400
-    assert error_class(response) == "validation_error"
 
 
 def test_error_envelope_shape_and_status_mapping(api, admin_api, product):

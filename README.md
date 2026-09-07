@@ -31,6 +31,21 @@ Then open:
 | `/docs` | Interactive API documentation (Django Ninja Swagger UI) |
 | `/api/...` | JSON machine API (25 operations, SPEC Section 11) |
 
+## 项目文档站点（Zensical）
+
+按照 [Zensical 官方安装指南](https://zensical.org/docs/get-started/) 接入 uv 开发依赖。
+
+```bash
+uv sync --locked
+uv run zensical serve                         # 或 just docs
+uv run zensical build --strict                # 或 just docs-build
+```
+
+预览地址为 <http://127.0.0.1:8001>，可与 Django 的 8000 端口同时运行。
+文档源文件位于 `docs/`，导航和主题配置位于 `zensical.toml`，静态构建输出到 `site/`。
+新增页面时更新配置中的 `nav`；部署文档站点时设置实际 `site_url`。
+Django 的 `/docs` 路径继续提供交互式 API 文档。
+
 ## Docker（低资源生产部署）
 
 ```bash

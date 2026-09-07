@@ -5,6 +5,8 @@
 #   just messages     compile gettext catalogs
 #   just superuser    bootstrap the only Admin account
 #   just test         run the pytest suite
+#   just docs         preview documentation (127.0.0.1:8001)
+#   just docs-build   build the static documentation site
 
 # List recipes
 default:
@@ -41,6 +43,14 @@ serve:
 
 alias run := serve
 alias start := serve
+
+# Preview the documentation site with live reload
+docs:
+    uv run zensical serve
+
+# Build documentation, treating warnings as errors
+docs-build:
+    uv run zensical build --strict
 
 # Pass through a Django management command: just manage shell
 manage *args:

@@ -2,7 +2,9 @@
 
 import logging
 
+from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.models import User
+from django.contrib.auth.password_validation import validate_password
 from django.db import IntegrityError, transaction
 from django.shortcuts import render
 from django.utils.translation import gettext
@@ -22,6 +24,9 @@ def register_account(username, password, request=None):
         admit_registration(request)
     if User.objects.count() >= MAX_ACCOUNTS:
         raise RateLimited("Account capacity reached. Contact the operator.")
+    username = User._meta.get_field("username").clean(User.normalize_username(username.strip()), None)
+    password = UserCreationForm.base_fields["password1"].clean(password)
+    validate_password(password, User(username=username))
     try:
         with transaction.atomic():
             return User.objects.create_user(username=username, password=password)

@@ -2,6 +2,7 @@
 
 import json
 
+import pytest
 from django.contrib.auth.models import User
 
 from licenses.models import Device
@@ -9,11 +10,21 @@ from licenses.models import Device
 from .conftest import error_class
 
 
-def test_unknown_json_field_rejected_without_mutation(api):
-    response = api.post("auth/register", {"username": "mallory", "password": "x" * 8, "is_admin": True})
+@pytest.mark.parametrize(
+    "fields",
+    [
+        {"is_admin": True},
+        {"username": ""},
+        {"username": "x" * 151},
+        {"username": "bad/name"},
+        {"password": ""},
+    ],
+)
+def test_invalid_registration_rejected_without_mutation(api, fields):
+    response = api.post("auth/register", {"username": "mallory", "password": "x" * 8, **fields})
     assert response.status_code == 400
     assert error_class(response) == "validation_error"
-    assert not User.objects.filter(username="mallory").exists()
+    assert not User.objects.exists()
 
 
 def test_max_devices_below_one(admin_api, product):
@@ -108,3 +119,12 @@ def test_empty_list_operations_return_empty_collections(admin_api, customer_api)
         assert isinstance(next(iter(body.values())), list)
     assert admin_api.json(admin_api.get("products"))["products"] == []
     assert customer_api.json(customer_api.get("me/entitlements"))["entitlements"] == []
+
+
+@pytest.mark.parametrize("fields", [{"code": " "}, {"code": "x" * 65}, {"name": "x" * 201}, {"name": ""}])
+def test_product_model_fields_validated_at_api_boundary(admin_api, product, fields):
+    assert admin_api.post("products", {"code": "new", "name": "New", **fields}).status_code == 400
+    if "name" in fields:
+        assert admin_api.patch(f"products/{product.pk}", fields).status_code == 400
+    product.refresh_from_db()
+    assert product.name == "Demo App"

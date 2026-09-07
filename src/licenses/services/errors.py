@@ -1,28 +1,16 @@
-"""SPEC Section 14.1 error classes. Envelope and status live on the type."""
-
-import logging
-
-from django.http import JsonResponse
-from ninja.errors import HttpError
-
-log = logging.getLogger(__name__)
+"""SPEC Section 14.1 error classes. Status and code live on the type."""
 
 
-class Failure(HttpError):
+class Failure(Exception):
     code, status, message = "validation_error", 400, "The request is invalid."
 
     def __init__(self, message=None):
         if message is not None:
             self.message = message
-        super().__init__(self.status, self.message)
+        super().__init__(self.message)
 
     def envelope(self):
         return {"error": self.code, "message": self.message}
-
-    def as_response(self, request=None, *, status=None, headers=None):
-        if request is not None:
-            log.warning("api_error", extra={"outcome": self.code})
-        return JsonResponse(self.envelope(), status=status or self.status, headers=headers)
 
 
 class ValidationError(Failure):

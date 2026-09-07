@@ -8,7 +8,7 @@ from django.contrib.auth.forms import AuthenticationForm
 from django.contrib.auth.models import User
 from django.core.exceptions import RequestDataTooBig
 from django.db import IntegrityError, transaction
-from django.http import Http404
+from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404 as django_get_object_or_404
 from django.views.decorators.cache import never_cache
 from django_ratelimit.exceptions import Ratelimited
@@ -30,6 +30,8 @@ from ..services.errors import (
 )
 from . import schemas as s
 
+log = logging.getLogger(__name__)
+
 
 class LicenseAPI(NinjaAPI):
     def get_openapi_operation_id(self, operation):
@@ -37,9 +39,10 @@ class LicenseAPI(NinjaAPI):
 
     def on_exception(self, request, exc):
         if isinstance(exc, Failure):
-            return exc.as_response(request)
+            log.warning("api_error", extra={"outcome": exc.code})
+            return JsonResponse(exc.envelope(), status=exc.status)
         if isinstance(exc, (SchemaError, UnicodeError, RequestDataTooBig)):
-            return ValidationError().as_response(request)
+            return JsonResponse(ValidationError().envelope(), status=400)
         return super().on_exception(request, exc)
 
 
@@ -71,8 +74,6 @@ class AdminSession(CustomerSession):
 
 customer_session = CustomerSession(csrf=False)
 admin_session = AdminSession(csrf=False)
-
-log = logging.getLogger(__name__)
 
 admin = Router(auth=admin_session)
 customer = Router(auth=customer_session)

@@ -3,9 +3,9 @@
 import logging
 
 from django.contrib.auth.models import User
-from django.contrib.sessions.models import Session
 from django.core.cache import cache
 from django.db import IntegrityError, transaction
+from user_sessions.models import Session
 from django.db.models import Value
 from django.db.models.functions import Lower
 from django.shortcuts import render
@@ -41,10 +41,7 @@ def register_account(username, password, request=None):
 
 def drop_account_sessions(account):
     """Delete this account's server-side sessions. Call after is_active changes."""
-    account_id = str(account.pk)
-    for session in Session.objects.iterator():
-        if session.get_decoded().get("_auth_user_id") == account_id:
-            session.delete()
+    Session.objects.filter(user_id=account.pk).delete()
 
 
 def set_account_active(account, active):

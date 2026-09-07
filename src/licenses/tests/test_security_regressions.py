@@ -6,8 +6,8 @@ from unittest.mock import patch
 
 import pytest
 from django.contrib.auth.models import User
-from django.contrib.sessions.models import Session
 from django.db import DataError, IntegrityError, transaction
+from user_sessions.models import Session
 from django.test import Client, override_settings
 
 from licenses import accounts, services

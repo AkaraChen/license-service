@@ -67,7 +67,8 @@ INSTALLED_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
-    "django.contrib.sessions",
+    "django.contrib.sessions",  # kept for licenses.0003 historical Session purge
+    "user_sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "admin_extra_buttons",
@@ -76,9 +77,10 @@ INSTALLED_APPS = [
     "axes",
     "django_ratelimit",
 ]
+SESSION_ENGINE = "user_sessions.backends.db"
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
-    "django.contrib.sessions.middleware.SessionMiddleware",
+    "user_sessions.middleware.SessionMiddleware",
     "django.middleware.locale.LocaleMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -183,7 +185,7 @@ UNFOLD = {
         },
     },
 }
-# Password hash: PBKDF2-SHA256 (Django default). Sessions: server-side, stored
+# Password hash: PBKDF2-SHA256 (Django default). Sessions: user_sessions rows
 # in the License Store DB (durable across restarts), cookie name "sessionid".
 LOGGING = {
     "version": 1,

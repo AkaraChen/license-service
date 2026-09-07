@@ -16,10 +16,11 @@ class Api:
     """Thin JSON client over Django's test Client."""
 
     def __init__(self):
-        self.client = Client()
+        self.client = Client(enforce_csrf_checks=True)
+        self.client.get("/ui/login")
 
     def call(self, method, path, body="__skip__", content_type="application/json"):
-        kwargs = {}
+        kwargs = {"HTTP_X_CSRFTOKEN": self.client.cookies["csrftoken"].value}
         if body != "__skip__":
             kwargs.update(data=body if isinstance(body, str) else json.dumps(body), content_type=content_type)
         return self.client.generic(method, f"/api/{path}", **kwargs)

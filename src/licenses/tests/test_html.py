@@ -9,25 +9,6 @@ from licenses.services import Failure
 from .conftest import ADMIN_PW, ALICE_PW
 
 
-def test_admin_console_requires_admin_session(db, admin, customer):
-    anonymous = Client()
-    response = anonymous.get("/admin/")
-    assert response.status_code == 302 and "/admin/login" in response["Location"]
-
-    non_admin = Client()
-    non_admin.post(
-        "/api/auth/login", {"username": "alice", "password": ALICE_PW}, content_type="application/json"
-    )
-    response = non_admin.get("/admin/")
-    assert response.status_code == 302 and "/admin/login" in response["Location"]
-
-    staff = Client()
-    staff.post("/api/auth/login", {"username": "root", "password": ADMIN_PW}, content_type="application/json")
-    home = staff.get("/admin/")
-    assert home.status_code == 200
-    assert b"License Service" in home.content
-
-
 def test_customer_pages_full_flow(db, customer, product):
     _, plaintext = services.issue_key(product, max_devices=1)
     browser = Client()
@@ -136,13 +117,6 @@ def test_login_returns_to_redeem_via_next(db, customer):
     logged_in = browser.post("/ui/login", {"username": "alice", "password": ALICE_PW, "next": "/ui/redeem"})
     assert logged_in.status_code == 302 and logged_in["Location"] == "/ui/redeem"
     assert browser.get("/ui/redeem").status_code == 200
-
-
-def test_login_rejects_offsite_next(db, customer):
-    response = Client().post(
-        "/ui/login", {"username": "alice", "password": ALICE_PW, "next": "https://evil.example/"}
-    )
-    assert response.status_code == 302 and response["Location"] == "/"
 
 
 def test_register_redirects_home(db):

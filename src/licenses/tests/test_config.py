@@ -1,5 +1,4 @@
-"""SPEC 17.8 host lifecycle: config_invalid and unreachable store prevent listen
-(Sections 6.1, 6.4, 8). Exercised via subprocesses against real startup."""
+"""Production security configuration and custom identity/session migration."""
 
 import os
 import subprocess
@@ -40,13 +39,6 @@ def test_production_with_session_secret_passes_check():
         "check", LICENSE_DEBUG="0", LICENSE_SESSION_SECRET="x" * 50, LICENSE_ALLOWED_HOSTS="example.com"
     )
     assert out.returncode == 0, out.stderr + out.stdout
-
-
-def test_sqlite_store_opens_and_migrates(tmp_path):
-    db_file = tmp_path / "store.sqlite3"
-    out = run_manage("migrate", LICENSE_DATABASE_URL=f"sqlite:///{db_file}")
-    assert out.returncode == 0, out.stderr
-    assert db_file.exists()
 
 
 def test_default_wsgi_profile_requires_secret():

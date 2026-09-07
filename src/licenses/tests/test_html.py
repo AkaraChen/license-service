@@ -40,7 +40,10 @@ def test_customer_pages_full_flow(db, customer, product):
     page = browser.get("/ui/register")
     assert page.status_code == 200
     assert b"css/tailwind.css" in page.content
-    response = browser.post("/ui/register", {"username": "carol", "password": "carol-pw-1"})
+    response = browser.post(
+        "/ui/register",
+        {"username": "carol", "password1": "carol-pw-1", "password2": "carol-pw-1"},
+    )
     assert response.status_code == 302  # registered and logged in
 
     home = browser.get("/")
@@ -152,7 +155,8 @@ def test_login_rejects_offsite_next(db, customer):
 def test_register_redirects_home(db):
     browser = Client()
     response = browser.post(
-        "/ui/register", {"username": "carol", "password": "carol-pw-1", "next": "/ui/redeem"}
+        "/ui/register",
+        {"username": "carol", "password1": "carol-pw-1", "password2": "carol-pw-1", "next": "/ui/redeem"},
     )
     assert response.status_code == 302 and response["Location"] == "/"
 

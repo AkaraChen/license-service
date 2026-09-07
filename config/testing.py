@@ -11,3 +11,9 @@ from .settings import *  # noqa: F403
 CACHES["default"]["KEY_PREFIX"] = "license-test-" + uuid.uuid4().hex  # noqa: F405
 if DATABASES["default"]["ENGINE"] == "django.db.backends.sqlite3":  # noqa: F405
     DATABASES["default"]["TEST"] = {"NAME": BASE_DIR / "test_license_store.sqlite3"}  # noqa: F405
+
+# Unit tests render templates without a production collectstatic build.
+STORAGES = {
+    **STORAGES,  # noqa: F405
+    "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+}

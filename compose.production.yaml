@@ -1,0 +1,44 @@
+services:
+  app:
+    build: .
+    image: license-service:local
+    environment:
+      LICENSE_SESSION_SECRET: ${LICENSE_SESSION_SECRET:?Set LICENSE_SESSION_SECRET in .env}
+      LICENSE_ALLOWED_HOSTS: ${LICENSE_ALLOWED_HOSTS:?Set LICENSE_ALLOWED_HOSTS in .env}
+      LICENSE_TRUST_PROXY: "1"
+      LICENSE_REDIS_URL: redis://redis:6379/0
+      WEB_CONCURRENCY: ${WEB_CONCURRENCY:-1}
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - license-data:/data
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    stop_grace_period: 40s
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,mode=1777
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 256m
+    cpus: 1.0
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "32mb", "--maxmemory-policy", "noeviction"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+    mem_limit: 96m
+    cpus: 0.25
+
+volumes:
+  license-data:
+  redis-data:

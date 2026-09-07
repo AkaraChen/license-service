@@ -3,6 +3,7 @@
 import os
 import sys
 from datetime import timedelta
+from importlib.util import find_spec
 from pathlib import Path
 
 import dj_database_url
@@ -49,16 +50,20 @@ INSTALLED_APPS = [
     "user_sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-    "django_tailwind_cli",
     "licenses",
     "axes",
     "django_ratelimit",
 ]
+# The CLI is only installed for local development and asset builds.
+if find_spec("django_tailwind_cli") is not None:
+    INSTALLED_APPS.append("django_tailwind_cli")
+
 SESSION_ENGINE = "user_sessions.backends.db"
 # Django 5.2 admin.E410 hard-codes contrib SessionMiddleware; user_sessions replaces it.
 SILENCED_SYSTEM_CHECKS = ["admin.E410"]
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "user_sessions.middleware.SessionMiddleware",
     "django.middleware.locale.LocaleMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -96,6 +101,11 @@ USE_TZ = True
 STATIC_URL = "static/"
 STATICFILES_DIRS = [BASE_DIR / "assets"]
 STATIC_ROOT = BASE_DIR / "staticfiles"
+STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"},
+}
+WHITENOISE_KEEP_ONLY_HASHED_FILES = True
 # Tailwind via django-tailwind-cli (standalone CLI, no Node). Source CSS lives
 # outside STATICFILES_DIRS so collectstatic never picks up `@import "tailwindcss"`.
 TAILWIND_CLI_VERSION = "4.3.3"

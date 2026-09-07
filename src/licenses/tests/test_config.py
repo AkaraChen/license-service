@@ -71,9 +71,14 @@ def test_production_http_redirect_and_cookie_flags(tmp_path):
     probe = r"""
 import json, threading, urllib.request, urllib.error, uuid
 from http.cookies import SimpleCookie
+from tempfile import TemporaryDirectory
+from django.core.management import call_command
 from wsgiref.simple_server import make_server
 from django.conf import settings
 settings.CACHES["default"]["KEY_PREFIX"] = "license-http-" + uuid.uuid4().hex
+static_dir = TemporaryDirectory()
+settings.STATIC_ROOT = static_dir.name
+call_command("collectstatic", interactive=False, verbosity=0)
 from config.wsgi import application
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
@@ -113,6 +118,7 @@ finally:
     thread.join()
     from django.core.cache import cache
     cache.delete_pattern("*")
+    static_dir.cleanup()
 """
     result = run_manage("shell", "-c", probe, **env)
     assert result.returncode == 0, result.stdout + result.stderr

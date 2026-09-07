@@ -1,0 +1,17 @@
+*
+!pyproject.toml
+!uv.lock
+!manage.py
+!config/
+!config/**
+!src/
+!src/**
+!assets/
+!assets/**
+!locale/
+!locale/**
+!docker/
+!docker/**
+**/__pycache__/
+**/*.pyc
+src/licenses/tests/

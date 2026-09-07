@@ -29,6 +29,49 @@ Then open:
 | `/docs` | Interactive API documentation (Django Ninja Swagger UI) |
 | `/api/...` | JSON machine API (25 operations, SPEC Section 11) |
 
+## Docker（低资源生产部署）
+
+```bash
+cp .env.example .env
+python3 -c 'import secrets; print(secrets.token_urlsafe(48))'
+# 将生成的密钥填入 .env 的 LICENSE_SESSION_SECRET，并填写实际域名 LICENSE_ALLOWED_HOSTS。
+docker compose -f compose.production.yaml up -d --build
+docker compose -f compose.production.yaml exec app python manage.py createsuperuser
+```
+
+需要 Docker Compose v2 或更新版本。开发用的 `compose.yaml` 仍然只启动 Redis；生产请显式使用
+`compose.production.yaml`。也可以用 `docker build -t license-service:local .` 单独构建镜像。
+
+应用监听宿主机 `127.0.0.1:8000`，由宿主机现有的 HTTPS 反向代理转发，保留 `Host` 并覆盖设置
+`X-Forwarded-Proto: https`。应用保留生产 HTTPS 重定向和安全 Cookie 设置，直接用 HTTP 访问会跳转。
+如果反向代理也在容器中，应将其加入应用网络，转发到 `app:8000`。此部署默认信任代理，应用端口不得
+直接暴露到不可信网络。代理部署和证书不包含在这份 Compose 中。
+
+精简措施：
+
+- 最终镜像使用 Python 3.14 Alpine，以普通用户运行；Debian 只用于兼容 Tailwind 的资源构建阶段。
+- 按 `uv.lock` 安装生产依赖，镜像不含 uv、pytest、Ruff、Tailwind CLI、gettext 或测试代码。
+- 构建时强制编译 CSS、翻译并收集静态资源；WhiteNoise 提供 gzip 和带哈希的长期缓存文件，无需额外静态文件服务。
+- 默认 Gunicorn 1 个 worker、2 个线程；SQLite 保存在 `license-data` 卷，不额外运行 PostgreSQL。
+- Redis 仅在内部网络提供服务，保留 AOF 持久化与 `noeviction`，避免自动逐出安全限流计数。
+
+Compose 的应用内存上限为 256 MiB、CPU 上限为 1 核；Redis 内存上限为 96 MiB、CPU 上限为
+0.25 核，Redis 数据上限为 32 MiB。这些是小流量起点和资源限制，不是已验证的容量保证，也不代表
+宿主机只需这些内存。Redis 达到数据上限会拒绝写入，应监控并按实际流量调整；不要用自动逐出策略
+替代扩容。增加 `WEB_CONCURRENCY` 时也应调整内存上限。SQLite 方案按单实例部署，写入增长后再考虑
+外部数据库。镜像体积主要影响下载和磁盘，运行费用还取决于流量、内存和托管平台计费。
+
+应用启动时先执行配置检查与数据库迁移，失败则退出；更新前备份数据库。
+`license-data` 保存授权和账号数据，`redis-data` 保存安全计数，两者都应保留。
+不要用 `docker compose down -v` 停止生产服务，否则会删除数据卷。
+
+```bash
+docker compose -f compose.production.yaml logs --tail=100 app
+docker stats --no-stream
+docker image ls license-service                              # 内容大小与本地磁盘占用
+docker compose -f compose.production.yaml down                 # 停止，保留数据卷
+```
+
 ## Configuration (SPEC Section 6)
 
 Deployment needs only a production secret and allowed hosts when using the local

@@ -78,6 +78,27 @@ docker image ls license-service                              # 内容大小与�
 docker compose -f compose.production.yaml down                 # 停止，保留数据卷
 ```
 
+## 自动发布 Docker 镜像
+
+GitHub Actions 工作流 `.github/workflows/docker-publish.yml` 在推送 `main`、推送 `v*` 标签或
+手动触发（main / v* 标签）时构建并上传镜像到 `ghcr.io/<仓库所有者>/<仓库名>`，名称自动转为小写。
+本仓库地址为 `ghcr.io/akarachen/license-service`。
+
+- `main` 发布 `latest` 和完整提交 SHA 标签。
+- 例如 `v1.0.0` 标签发布同名镜像标签和完整提交 SHA，不覆盖 `latest`。
+- 当前构建 `linux/amd64`，与默认 Kamal 配置一致；此工作流未发布 ARM64 镜像。
+- 使用构建缓存；Actions 固定到提交 SHA；上传使用内置 `GITHUB_TOKEN`，只授予代码读取及包写入权限。
+
+提交并推送工作流后，在 GitHub 的 Actions → **Publish Docker image** 查看构建结果。
+第一次发布后的包可见性通常为 private；需要匿名拉取时，在 Package settings 中将包设为 public。
+如包已存在但不允许工作流上传，检查该包的 Actions access 是否授权本仓库。
+详见 [GitHub Container registry 文档](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry)。
+
+```bash
+docker pull ghcr.io/akarachen/license-service:latest
+# 生产部署建议使用已成功发布的完整提交 SHA，避免 latest 后续改变。
+```
+
 ## Kamal（单服务器部署）
 
 已提供 `config/deploy.yml` 和 `.kamal/secrets.example`，复用精简镜像、SQLite 和同机 Redis，

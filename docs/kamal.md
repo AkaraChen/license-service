@@ -55,6 +55,22 @@ kamal superuser                 # 在正在运行的容器内交互式创建管�
 Redis accessory 独立管理，普通 `kamal deploy` 不会更新它，参见
 [Accessories 文档](https://kamal-deploy.org/docs/configuration/accessories/)。
 
+## 直接部署 Actions 已发布的镜像
+
+等 GitHub Actions 的 **Publish Docker image** 成功后，可以跳过本地构建。
+把 `image` 设置为实际镜像路径，例如本仓库的 `akarachen/license-service`，`registry.server` 保持 `ghcr.io`。
+`registry.username` 填写有拉取权限的 GitHub 用户，`.kamal/secrets` 中的 registry token 只需具有所需读取权限；
+它与 Actions 自动获得的 `GITHUB_TOKEN` 是两套凭据。
+
+```bash
+# 将 <完整提交SHA> 替换成 Actions 已成功发布的 40 位提交 SHA。
+kamal setup --skip-push --version <完整提交SHA>   # 首次部署
+kamal deploy --skip-push --version <完整提交SHA>  # 后续更新
+```
+
+这条路径仍需运行 Kamal 所需的工具，但不在本地或服务器重复构建应用镜像。
+Actions 当前只发布 amd64，使用此镜像的服务器也必须是 amd64。
+
 ## 资源、权限与数据
 
 - 应用上限 256 MiB、1 CPU，默认一个 worker；Redis 上限 96 MiB、0.25 CPU，数据上限 32 MiB。

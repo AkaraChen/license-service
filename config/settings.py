@@ -1,7 +1,5 @@
 """Production defaults; local development opts in with LICENSE_DEBUG=1."""
 
-import json
-import logging
 import os
 import sys
 from datetime import timedelta
@@ -10,26 +8,6 @@ from pathlib import Path
 import dj_database_url
 from django.core.exceptions import ImproperlyConfigured
 from django.templatetags.static import static
-
-
-class ExtraFormatter(logging.Formatter):
-    _standard = set(logging.LogRecord("n", 0, "", 0, "", (), None).__dict__) | {
-        "message",
-        "asctime",
-        "taskName",
-    }
-
-    def format(self, record):
-        extras = {
-            key: value
-            for key, value in record.__dict__.items()
-            if key not in self._standard and not key.startswith("_")
-        }
-        formatted = super().format(record)
-        if extras:
-            return f"{formatted} {json.dumps(extras, default=str, ensure_ascii=True)}"
-        return formatted
-
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 SRC_DIR = BASE_DIR / "src"
@@ -86,7 +64,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
-    "licenses.middleware.RequestIdMiddleware",
+    "log_request_id.middleware.RequestIDMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django_ratelimit.middleware.RatelimitMiddleware",
     "axes.middleware.AxesMiddleware",
@@ -188,13 +166,16 @@ UNFOLD = {
 }
 # Password hash: PBKDF2-SHA256 (Django default). Sessions: user_sessions rows
 # in the License Store DB (durable across restarts), cookie name "sessionid".
+LOG_REQUEST_ID_HEADER = "HTTP_X_REQUEST_ID"
+GENERATE_REQUEST_ID_IF_NOT_IN_HEADER = False
+NO_REQUEST_ID = None
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
-    "filters": {"request_id": {"()": "licenses.middleware.RequestIdFilter"}},
+    "filters": {"request_id": {"()": "log_request_id.filters.RequestIDFilter"}},
     "formatters": {
         "console": {
-            "()": "config.settings.ExtraFormatter",
+            "()": "pythonjsonlogger.json.JsonFormatter",
             "format": "{levelname} {name} {message}",
             "style": "{",
         }

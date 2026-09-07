@@ -88,11 +88,11 @@ MIDDLEWARE = [
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "licenses.middleware.RequestIdMiddleware",
-    "licenses.middleware.SameOriginCookieWriteMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django_ratelimit.middleware.RatelimitMiddleware",
     "axes.middleware.AxesMiddleware",
 ]
+CSRF_FAILURE_VIEW = "licenses.middleware.csrf_failure"
 ROOT_URLCONF = "config.urls"
 TEMPLATES = [
     {

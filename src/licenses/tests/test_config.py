@@ -84,6 +84,7 @@ def test_production_http_redirect_and_cookie_flags(tmp_path):
     # the explicitly trusted local edge header selects the HTTPS cookie profile.
     probe = r"""
 import json, threading, urllib.request, urllib.error
+from http.cookies import SimpleCookie
 from wsgiref.simple_server import make_server
 from config.wsgi import application
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -102,14 +103,17 @@ try:
         assert exc.code == 301 and exc.headers["Location"].startswith("https://")
     from django.contrib.auth.models import User
     User.objects.create_user("test-customer", password="test-password")
-    request = urllib.request.Request(base + "/api/auth/login", data=json.dumps({"username":"test-customer","password":"test-password"}).encode(), headers={"Content-Type":"application/json", "X-Forwarded-Proto":"https"})
+    with opener.open(urllib.request.Request(base + "/ui/login", headers={"X-Forwarded-Proto":"https"})) as response:
+        csrf = SimpleCookie(response.headers["Set-Cookie"])["csrftoken"].value
+    headers = {"Content-Type":"application/json", "X-Forwarded-Proto":"https", "Origin":base.replace("http:", "https:"), "Cookie":"csrftoken=" + csrf, "X-CSRFToken":csrf}
+    request = urllib.request.Request(base + "/api/auth/login", data=json.dumps({"username":"test-customer","password":"test-password"}).encode(), headers=headers)
     with opener.open(request) as response:
         assert response.status == 200
         cookies = response.headers.get_all("Set-Cookie")
         assert any(c.startswith("sessionid=") and "Secure" in c and "HttpOnly" in c for c in cookies)
         assert any(c.startswith("csrftoken=") and "Secure" in c for c in cookies)
         assert "max-age=31536000" in response.headers["Strict-Transport-Security"]
-    request = urllib.request.Request(base + "/api/auth/register", data=b'{"username":"\\ud800","password":"pw"}', headers={"Content-Type":"application/json", "X-Forwarded-Proto":"https"})
+    request = urllib.request.Request(base + "/api/auth/register", data=b'{"username":"\\ud800","password":"pw"}', headers=headers)
     try:
         opener.open(request)
         raise AssertionError("invalid Unicode accepted")

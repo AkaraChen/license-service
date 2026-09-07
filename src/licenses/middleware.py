@@ -2,6 +2,7 @@ import contextvars
 import logging
 
 from django.http import JsonResponse
+from django.views.csrf import csrf_failure as django_csrf_failure
 
 _request_id = contextvars.ContextVar("request_id", default=None)
 
@@ -28,24 +29,9 @@ class RequestIdFilter(logging.Filter):
         return True
 
 
-class SameOriginCookieWriteMiddleware:
-    def __init__(self, get_response):
-        self.get_response = get_response
+def csrf_failure(request, reason=""):
+    from .services.errors import Forbidden
 
-    def __call__(self, request):
-        return self.get_response(request)
-
-    def process_view(self, request, view, args, kwargs):
-        from .services.errors import Forbidden
-
-        origin = request.headers.get("Origin")
-        if (
-            request.path.startswith("/api/")
-            and request.method in {"POST", "PATCH"}
-            and request.path not in {"/api/activate", "/api/validate"}
-            and origin is not None
-            and origin != f"{request.scheme}://{request.get_host()}"
-        ):
-            forbidden = Forbidden("Cross-origin writes are not allowed.")
-            return JsonResponse(forbidden.envelope(), status=forbidden.status)
-        return None
+    if not request.path.startswith("/api/"):
+        return django_csrf_failure(request, reason=reason)
+    return JsonResponse(Forbidden("CSRF verification failed.").envelope(), status=403)

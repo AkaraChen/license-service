@@ -60,7 +60,9 @@ def test_empty_display_name_rejected_at_http_boundary(api, customer_api, redeeme
     assert customer_api.patch(f"me/devices/{device['device_id']}", {"display_name": ""}).status_code == 400
     assert (
         customer_api.client.post(
-            f"/ui/devices/{device['device_id']}/rename", {"display_name": ""}
+            f"/ui/devices/{device['device_id']}/rename",
+            {"display_name": ""},
+            HTTP_X_CSRFTOKEN=customer_api.client.cookies["csrftoken"].value,
         ).status_code
         == 400
     )
@@ -89,12 +91,16 @@ def test_error_envelope_shape_and_status_mapping(api, admin_api, product):
 
 
 def test_activate_and_validate_need_no_session(api, redeemed):
+    api.client.cookies.clear()
     _, plaintext = redeemed
-    bound = api.post("activate", {"license_key": plaintext, "device_fingerprint": "machine-1"})
-    assert bound.status_code == 201  # fresh client: no session cookie at all
-    ok = api.post("validate", {"license_key": plaintext, "device_fingerprint": "machine-1"})
-    assert ok.status_code == 200
-    assert api.json(ok)["valid"] is True
+    for endpoint, status in (("activate", 201), ("validate", 200)):
+        response = api.client.post(
+            f"/api/{endpoint}",
+            {"license_key": plaintext, "device_fingerprint": "machine-1"},
+            content_type="application/json",
+        )
+        assert response.status_code == status
+    assert response.json()["valid"] is True
 
 
 def test_session_cookie_required_for_customer_and_admin_ops(api):

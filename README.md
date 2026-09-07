@@ -73,9 +73,8 @@ also rejects an unreachable database (`licenses.E002`).
   the language from `Accept-Language`; there is no in-page switcher. Machine
   `error` class names stay English.
 - **Logging**: Django `logging.getLogger(__name__)` with `extra={...}` at mutation
-  sites. `LOGGING` in settings uses a console formatter that appends extra keys.
-  `RequestIdMiddleware` copies `X-Request-ID` onto log records when the client
-  sent that header; the service does not generate an id. Logging never contains
+  sites. `python-json-logger` outputs one JSON object per line, including extra fields.
+  `django-log-request-id` copies `X-Request-ID`; missing IDs are null and never generated. Logging never contains
   key plaintext, `key_hash`, passwords, session secrets, or raw fingerprints.
 - **License Key generation**: `lic_` + 32 characters from a 29-symbol alphabet
   (`abcdefghjkmnpqrstuvwxyz23456789`, no look-alikes) from `secrets.choice`:

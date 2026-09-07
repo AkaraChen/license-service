@@ -102,10 +102,13 @@ also rejects an unreachable database (`licenses.E002`).
   the connection uses a 20s busy timeout and `IMMEDIATE` transactions so a locked
   write waits instead of failing immediately. The current entitlement
   status/expiry is checked under the lock.
-- **CSRF policy**: the JSON API is `csrf_exempt` but every write requires
-  `Content-Type: application/json`, including empty writes (send `{}`). Session
-  writes and login/registration reject a supplied Origin unless it exactly matches
-  the request origin. HTML/Admin forms use Django CSRF tokens.
+- **CSRF policy**: Django CSRF protects JSON login/registration and all cookie-authenticated
+  writes, as well as HTML/Admin forms. JSON clients first GET `/ui/login`, retain its
+  `csrftoken` cookie, and send that token in `X-CSRFToken` on writes. Login rotates the
+  CSRF cookie: use its updated value afterwards. HTTPS requests also supply the service
+  origin in `Origin`. JSON CSRF failures return 403 with the `forbidden` envelope.
+  `/api/activate` and `/api/validate` authenticate with the License Key and need no CSRF
+  token. Writes still require `Content-Type: application/json`, including empty `{}`.
 - **Login abuse controls**: `django-axes` protects JSON, Customer UI and Django
   Admin through Django's authentication backend/signals and Axes middleware.
   `AXES_LOCKOUT_PARAMETERS = ["username", "ip_address"]` checks the account and

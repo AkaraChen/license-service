@@ -61,7 +61,7 @@ def test_request_id_copied_from_header_only(api, caplog):
             "/api/auth/login",
             data=json.dumps({"username": "missing", "password": "secret"}),
             content_type="application/json",
-            headers={"X-Request-ID": "client-rid-1"},
+            headers={"X-Request-ID": "client-rid-1", "X-CSRFToken": api.client.cookies["csrftoken"].value},
         )
         api.post("auth/login", {"username": "missing", "password": "secret"})
     records = [r for r in caplog.records if r.name.startswith("licenses.") and r.getMessage() == "api_error"]

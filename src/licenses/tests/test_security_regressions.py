@@ -7,8 +7,8 @@ from unittest.mock import patch
 import pytest
 from django.contrib.auth.models import User
 from django.db import DataError, IntegrityError, transaction
-from user_sessions.models import Session
 from django.test import Client, override_settings
+from user_sessions.models import Session
 
 from licenses import accounts, services
 from licenses.models import Device, Entitlement, LicenseKey
@@ -99,15 +99,29 @@ def test_activation_changes_invalidate_existing_sessions(db, admin, customer_api
     assert customer_api.get("me/entitlements").status_code == 401
 
 
-def test_sibling_origin_cannot_send_json_session_mutations(customer_api, redeemed):
+def test_csrf_protects_public_login_and_session_writes(customer, redeemed):
+    client = Client(enforce_csrf_checks=True)
+    credentials = {"username": customer.username, "password": ALICE_PW}
+    for path in ("/api/auth/register", "/api/auth/login"):
+        response = post(client, path, credentials)
+        assert response.status_code == 403 and response.json()["error"] == "forbidden"
+    client.get("/ui/login")
+    token = client.cookies["csrftoken"].value
+    assert post(client, "/api/auth/login", credentials, HTTP_X_CSRFTOKEN=token).status_code == 200
+    token = client.cookies["csrftoken"].value
     entitlement, _ = redeemed
     device, _ = services.bind(entitlement, "machine")
     path = f"/api/me/devices/{device.pk}/unbind"
-    response = post(customer_api.client, path, {}, HTTP_ORIGIN="http://evil.testserver")
-    assert response.status_code == 403
-    device.refresh_from_db()
-    assert device.status == "bound"
-    assert post(customer_api.client, path, {}, HTTP_ORIGIN="http://testserver").status_code == 200
+    for headers in (
+        {},
+        {"HTTP_X_CSRFTOKEN": "wrong"},
+        {"HTTP_X_CSRFTOKEN": token, "HTTP_ORIGIN": "http://evil.testserver"},
+    ):
+        response = post(client, path, {}, **headers)
+        assert response.status_code == 403 and response.json()["error"] == "forbidden"
+        device.refresh_from_db()
+        assert device.status == "bound"
+    assert post(client, path, {}, HTTP_X_CSRFTOKEN=token, HTTP_ORIGIN="http://testserver").status_code == 200
 
 
 def test_batch_and_single_issue_do_not_persist_plaintext(db, admin_api, product):
@@ -115,7 +129,9 @@ def test_batch_and_single_issue_do_not_persist_plaintext(db, admin_api, product)
         ("/admin/licenses/licensekey/issue_batch/", {"product": product.pk, "max_devices": 1, "count": 3}),
         ("/admin/licenses/licensekey/add/", {"product": product.pk, "max_devices": 1}),
     ]:
-        response = admin_api.client.post(path, data)
+        response = admin_api.client.post(
+            path, data, HTTP_X_CSRFTOKEN=admin_api.client.cookies["csrftoken"].value
+        )
         assert response.status_code == 200  # no redirect or session-backed handoff
         assert "no-store" in response["Cache-Control"]
         keys = re.findall(r"<code>(lic_[a-z0-9]{32})</code>", response.content.decode())

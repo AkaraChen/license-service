@@ -12,14 +12,16 @@ from django.db import IntegrityError, transaction
 from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.views.decorators.cache import never_cache
+from django.views.decorators.csrf import csrf_protect
 from django_ratelimit.exceptions import Ratelimited
 from ninja import NinjaAPI, Router, Status
 from ninja.decorators import decorate_view
-from ninja.errors import AuthenticationError
+from ninja.errors import AuthenticationError, HttpError
 from ninja.errors import ValidationError as SchemaError
 from ninja.security import SessionAuth
 
 from .. import accounts, services
+from ..middleware import csrf_failure
 from ..models import Device, Entitlement, LicenseKey, Product
 from ..services.errors import (
     Conflict,
@@ -43,6 +45,8 @@ class LicenseAPI(NinjaAPI):
         if isinstance(exc, Failure):
             log.warning("api_error", extra={"outcome": exc.code})
             return JsonResponse(exc.envelope(), status=exc.status)
+        if isinstance(exc, HttpError) and exc.status_code == 403:
+            return csrf_failure(request)
         if isinstance(exc, Http404):
             return JsonResponse(NotFound().envelope(), status=404)
         if isinstance(exc, AuthenticationError):
@@ -64,8 +68,8 @@ class AdminSession(SessionAuth):
         return user
 
 
-customer_session = SessionAuth(csrf=False)
-admin_session = AdminSession(csrf=False)
+customer_session = SessionAuth()
+admin_session = AdminSession()
 
 admin = Router(auth=admin_session)
 customer = Router(auth=customer_session)
@@ -73,6 +77,7 @@ public = Router()
 
 
 @public.post("/auth/register", response={201: dict[str, s.Account], **s.ERROR_RESPONSES})
+@decorate_view(csrf_protect)
 def register(request, data: s.Credentials):
     try:
         user = accounts.register_account(data.username, data.password, request=request)
@@ -83,6 +88,7 @@ def register(request, data: s.Credentials):
 
 
 @public.post("/auth/login", response={200: dict[str, s.Account], **s.ERROR_RESPONSES})
+@decorate_view(csrf_protect)
 def login(request, data: s.Credentials):
     form = AuthenticationForm(request, data=data.model_dump())
     if not form.is_valid():

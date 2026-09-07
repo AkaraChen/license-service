@@ -83,6 +83,7 @@ def test_logs_never_contain_secrets_or_raw_fingerprints(
     monkeypatch.setattr(logging.getLogger("licenses").handlers[0], "stream", output)
     entitlement, plaintext = redeemed
     with caplog.at_level(logging.INFO):
+        assert api.login("alice", ALICE_PW).status_code == 200
         admin_api.post("license-keys", {"product_id": product.pk, "max_devices": 1})
         customer_api.post(
             f"me/entitlements/{entitlement.pk}/devices", {"device_fingerprint": "secret-fingerprint-1"}

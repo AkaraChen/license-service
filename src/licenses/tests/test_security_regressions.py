@@ -129,6 +129,7 @@ def test_batch_and_single_issue_do_not_persist_plaintext(db, admin_api, product)
         ("/admin/licenses/licensekey/issue_batch/", {"product": product.pk, "max_devices": 1, "count": 3}),
         ("/admin/licenses/licensekey/add/", {"product": product.pk, "max_devices": 1}),
     ]:
+        before = LicenseKey.objects.count()
         response = admin_api.client.post(
             path, data, HTTP_X_CSRFTOKEN=admin_api.client.cookies["csrftoken"].value
         )
@@ -136,11 +137,17 @@ def test_batch_and_single_issue_do_not_persist_plaintext(db, admin_api, product)
         assert "no-store" in response["Cache-Control"]
         keys = re.findall(r"<code>(lic_[a-z0-9]{32})</code>", response.content.decode())
         assert len(keys) == data.get("count", 1)
+        assert LicenseKey.objects.count() == before + len(keys)
         durable = json.dumps([session.get_decoded() for session in Session.objects.all()])
+        reloaded = admin_api.client.get(path).content.decode()
+        listed = admin_api.client.get("/admin/licenses/licensekey/").content.decode()
         for key in keys:
             assert key not in durable
             assert key not in str(response.cookies)
-            assert key not in admin_api.client.get(path).content.decode()
+            assert key not in reloaded
+            assert key not in listed
+            assert key[:12] in listed
+        assert LicenseKey.objects.count() == before + len(keys)
 
 
 @pytest.mark.parametrize("status", ["suspended", "revoked"])

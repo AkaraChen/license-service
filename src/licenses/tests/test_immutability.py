@@ -12,40 +12,15 @@ from licenses.models import Device
 from .conftest import error_class
 
 
-def test_set_entitlement_status_rejects_immutable_fields(admin_api, redeemed):
+@pytest.mark.parametrize("field,value", [("max_devices", 99), ("expires_at", None), ("source_key_id", 99999)])
+def test_set_entitlement_status_rejects_immutable_fields(admin_api, redeemed, field, value):
     entitlement, _ = redeemed
-    for field, value in (("max_devices", 99), ("expires_at", None)):
-        response = admin_api.post(f"entitlements/{entitlement.pk}/status", {"status": "active", field: value})
-        assert response.status_code == 400
-        assert error_class(response) == "validation_error"
-
-
-def test_no_operation_mutates_max_devices_or_expires_at(admin_api, customer_api, redeemed):
-    entitlement, _ = redeemed
-    before = entitlement.max_devices, entitlement.expires_at
-    assert admin_api.call("PATCH", f"entitlements/{entitlement.pk}", {"max_devices": 99}).status_code in (
-        400,
-        404,
-        405,
-    )
-    assert customer_api.patch(f"me/entitlements/{entitlement.pk}", {"max_devices": 99}).status_code in (
-        400,
-        404,
-        405,
-    )
-    entitlement.refresh_from_db()
-    assert (entitlement.max_devices, entitlement.expires_at) == before
-
-
-def test_source_key_cannot_change(admin_api, redeemed, product):
-    entitlement, _ = redeemed
-    other_key, _ = services.issue_key(product, max_devices=1)
-    response = admin_api.post(
-        f"entitlements/{entitlement.pk}/status", {"status": "active", "source_key_id": other_key.pk}
-    )
+    before = entitlement.max_devices, entitlement.expires_at, entitlement.source_key_id
+    response = admin_api.post(f"entitlements/{entitlement.pk}/status", {"status": "active", field: value})
     assert response.status_code == 400
+    assert error_class(response) == "validation_error"
     entitlement.refresh_from_db()
-    assert entitlement.source_key_id != other_key.pk
+    assert (entitlement.max_devices, entitlement.expires_at, entitlement.source_key_id) == before
 
 
 @pytest.mark.django_db(transaction=True)

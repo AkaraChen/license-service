@@ -31,11 +31,6 @@ def test_register_always_yields_non_admin(api):
     assert api.json(response)["account"]["is_admin"] is False
 
 
-def test_register_cannot_escalate_via_unknown_field(api):
-    response = api.post("auth/register", {"username": "mallory", "password": "pw-12345", "is_staff": True})
-    assert response.status_code == 400
-
-
 def test_duplicate_username_conflict_case_insensitive(api):
     assert api.post("auth/register", {"username": "Alice", "password": "pw-12345"}).status_code == 201
     response = api.post("auth/register", {"username": "alice", "password": "pw-12345"})

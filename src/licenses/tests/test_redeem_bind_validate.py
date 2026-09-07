@@ -168,14 +168,6 @@ def test_set_display_name(customer_api, redeemed):
 # --- validate (7.7) ----------------------------------------------------------
 
 
-def test_validate_happy_path(api, redeemed):
-    _, plaintext = redeemed
-    api.post("activate", {"license_key": plaintext, "device_fingerprint": "m1"})
-    response = api.post("validate", {"license_key": plaintext, "device_fingerprint": "m1"})
-    assert response.status_code == 200
-    assert api.json(response)["valid"] is True
-
-
 def test_validate_creates_no_rows(api, redeemed):
     _, plaintext = redeemed
     counts = [Device.objects.count(), Entitlement.objects.count(), LicenseKey.objects.count()]

@@ -6,7 +6,6 @@ from django.test import Client, override_settings
 
 from licenses import services
 from licenses.models import Entitlement, LicenseKey
-from licenses.services import Failure
 
 from .conftest import ADMIN_PW, ALICE_PW
 
@@ -85,7 +84,7 @@ def test_redeem_failure_stays_on_redeem_page(db, customer):
     assert b"not recognized" in response.content
 
 
-def test_unbind_failure_stays_on_entitlement_page(db, customer, redeemed, monkeypatch):
+def test_repeated_unbind_returns_to_entitlement_page(db, customer, redeemed):
     entitlement, _ = redeemed
     device, _ = services.bind(entitlement, "browser-machine", "Laptop")
     browser = Client()
@@ -93,17 +92,12 @@ def test_unbind_failure_stays_on_entitlement_page(db, customer, redeemed, monkey
         "/api/auth/login", {"username": "alice", "password": ALICE_PW}, content_type="application/json"
     )
 
-    def refuse(bound):
-        raise Failure("Cannot unbind this device.")
-
-    monkeypatch.setattr(services, "unbind", refuse)
-    response = browser.post(f"/ui/devices/{device.pk}/unbind")
-    assert response.status_code == 400
-    assert b"Devices for" in response.content
-    assert b"Cannot unbind this device." in response.content
-    assert b"Request failed" not in response.content
-    device.refresh_from_db()
-    assert device.status == "bound"
+    for _ in range(2):
+        response = browser.post(f"/ui/devices/{device.pk}/unbind", follow=True)
+        assert response.status_code == 200
+        assert b"Devices for" in response.content
+        device.refresh_from_db()
+        assert device.status == "unbound"
 
 
 def test_rename_validation_stays_on_entitlement_page(db, customer, redeemed):

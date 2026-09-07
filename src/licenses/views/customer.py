@@ -9,6 +9,7 @@ import logging
 
 from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.views import LoginView
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.response import TemplateResponse
@@ -17,7 +18,7 @@ from django.views.decorators.http import require_GET, require_POST
 from .. import accounts, services
 from ..models import Device, Entitlement
 from ..services import Failure
-from .forms import DeviceNameForm, RedeemForm, RegistrationForm
+from .forms import DeviceNameForm, RedeemForm
 
 log = logging.getLogger(__name__)
 
@@ -39,7 +40,7 @@ def _entitlement_response(request, entitlement, *, error=None, rename_forms=None
 def register_page(request):
     if request.user.is_authenticated:
         return redirect("ui_home")
-    form = RegistrationForm(request.POST if request.method == "POST" else None)
+    form = UserCreationForm(request.POST if request.method == "POST" else None)
     if form.is_valid():
         try:
             user = accounts.register_account(

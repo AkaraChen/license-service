@@ -3,10 +3,14 @@
 from datetime import datetime
 from typing import Annotated, Literal
 
-from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.validators import ProhibitNullCharactersValidator
 from ninja import Schema
-from pydantic import BeforeValidator, ConfigDict, Field, StrictStr, TypeAdapter, field_validator
+from pydantic import AfterValidator, BeforeValidator, ConfigDict, Field, TypeAdapter, field_validator
+
+from ..models import Product as ProductModel
+
+ProductCode = Annotated[str, AfterValidator(ProductModel._meta.get_field("code").formfield().clean)]
+ProductName = Annotated[str, AfterValidator(ProductModel._meta.get_field("name").formfield().clean)]
 
 Fingerprint = Annotated[str, BeforeValidator(str.strip), Field(min_length=1, max_length=128)]
 _reject_null = ProhibitNullCharactersValidator()
@@ -19,10 +23,7 @@ class Empty(Schema):
     @classmethod
     def valid_text(cls, value):
         if isinstance(value, str):
-            try:
-                _reject_null(value)
-            except DjangoValidationError as exc:
-                raise ValueError(exc.messages[0]) from None
+            _reject_null(value)
         return value
 
 
@@ -32,20 +33,19 @@ class Credentials(Empty):
 
 
 class ProductCreate(Empty):
-    code: str
-    name: str
+    code: ProductCode
+    name: ProductName
 
 
 class ProductUpdate(Empty):
-    name: str = ""
+    name: ProductName = ""
 
 
 class KeyIssue(Empty):
     product_id: int
     max_devices: int = Field(ge=1)
     expires_at: (
-        Annotated[datetime, Field(strict=False), BeforeValidator(TypeAdapter(StrictStr).validate_python)]
-        | None
+        Annotated[datetime, Field(strict=False), BeforeValidator(TypeAdapter(str).validate_python)] | None
     ) = None
 
 

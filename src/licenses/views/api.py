@@ -7,6 +7,7 @@ from django.contrib.auth import logout as auth_logout
 from django.contrib.auth.forms import AuthenticationForm
 from django.contrib.auth.models import User
 from django.core.exceptions import RequestDataTooBig
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import IntegrityError, transaction
 from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404
@@ -14,7 +15,8 @@ from django.views.decorators.cache import never_cache
 from django_ratelimit.exceptions import Ratelimited
 from ninja import NinjaAPI, Router, Status
 from ninja.decorators import decorate_view
-from ninja.errors import AuthenticationError, ValidationError as SchemaError
+from ninja.errors import AuthenticationError
+from ninja.errors import ValidationError as SchemaError
 from ninja.security import SessionAuth
 
 from .. import accounts, services
@@ -46,7 +48,7 @@ class LicenseAPI(NinjaAPI):
         if isinstance(exc, AuthenticationError):
             log.warning("api_error", extra={"outcome": "unauthenticated"})
             return JsonResponse(Unauthenticated().envelope(), status=401)
-        if isinstance(exc, (SchemaError, UnicodeError, RequestDataTooBig)):
+        if isinstance(exc, (SchemaError, DjangoValidationError, UnicodeError, RequestDataTooBig)):
             return JsonResponse(ValidationError().envelope(), status=400)
         return super().on_exception(request, exc)
 
@@ -99,12 +101,9 @@ def logout(request, data: s.Empty = s.Empty()):
 
 @admin.post("/products", response={201: dict[str, s.Product], **s.ERROR_RESPONSES})
 def create_product(request, data: s.ProductCreate):
-    code = data.code.strip()
-    if not code:
-        raise ValidationError("code must not be empty.")
     try:
         with transaction.atomic():
-            product = Product.objects.create(code=code, name=data.name)
+            product = Product.objects.create(**data.model_dump())
     except IntegrityError:
         raise Conflict() from None
     log.info("create_product", extra={"product_id": product.pk})

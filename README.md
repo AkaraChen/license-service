@@ -81,7 +81,8 @@ also rejects an unreachable database (`licenses.E002`).
   (`abcdefghjkmnpqrstuvwxyz23456789`, no look-alikes) from `secrets.choice`:
   ~155 bits of entropy. Only the SHA-256 hex digest and the first 12 characters
   (`key_prefix`) persist; plaintext is returned once in the issuing response.
-- **Username**: trimmed, 1–150 chars, any charset, unique case-insensitively (ASCII
+- **Username**: trimmed, 1–150 chars, Django username characters (letters, digits, `@.+-_`),
+  NFKC-normalized, unique case-insensitively (ASCII
   case-insensitive on SQLite via database `LOWER`). A unique index enforces this
   across all writers; concurrent duplicate registration returns 409. Login is
   case-sensitive and must match the stored username exactly.

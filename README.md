@@ -61,6 +61,12 @@ Compose 的应用内存上限为 256 MiB、CPU 上限为 1 核；Redis 内存上
 替代扩容。增加 `WEB_CONCURRENCY` 时也应调整内存上限。SQLite 方案按单实例部署，写入增长后再考虑
 外部数据库。镜像体积主要影响下载和磁盘，运行费用还取决于流量、内存和托管平台计费。
 
+健康检查接口 `GET /healthz`（也支持 HEAD）检查数据库连接及 Redis 写入、读取，正常返回
+`200 {"status":"ok"}`，依赖异常返回 `503 {"status":"unavailable"}`，不暴露异常详情且禁止缓存。
+仅此路径豁免 HTTPS 跳转，仍校验允许的 Host。探测使用 Python 标准库，不增加 curl 或其他依赖。
+Compose 每 30 秒探测一次，超时 5 秒，启动宽限 30 秒，连续失败 3 次标记 unhealthy。
+注意：`restart: unless-stopped` 不会仅因 unhealthy 自动重启；进程退出时才触发重启策略。
+
 应用启动时先执行配置检查与数据库迁移，失败则退出；更新前备份数据库。
 `license-data` 保存授权和账号数据，`redis-data` 保存安全计数，两者都应保留。
 不要用 `docker compose down -v` 停止生产服务，否则会删除数据卷。

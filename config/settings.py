@@ -26,6 +26,8 @@ elif not SECRET_KEY or SECRET_KEY == "django-insecure-development-default":
 SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
 SECURE_SSL_REDIRECT = not DEBUG
+# Container-local probes use HTTP; all other paths retain HTTPS enforcement.
+SECURE_REDIRECT_EXEMPT = [r"^healthz$"]
 SECURE_HSTS_SECONDS = 31536000 if not DEBUG else 0
 # Opt in only behind an edge that strips and replaces X-Forwarded-Proto.
 if os.environ.get("LICENSE_TRUST_PROXY", "0") == "1":

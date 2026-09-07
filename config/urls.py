@@ -5,8 +5,10 @@ from django.urls import path
 from django.utils.translation import gettext as _
 
 from licenses.views import api, customer
+from licenses.views.health import health
 
 urlpatterns = [
+    path("healthz", health, name="health"),
     path("admin/", admin.site.urls),
     path("", customer.home, name="ui_home"),
     path("ui/register", customer.register_page, name="ui_register"),

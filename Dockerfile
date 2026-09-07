@@ -43,7 +43,7 @@ COPY --from=build /app/staticfiles ./staticfiles
 COPY --from=build /app/manage.py ./manage.py
 # Keep the configured static source directory present, without duplicate assets.
 RUN mkdir assets
-COPY docker/entrypoint.sh docker/gunicorn.conf.py ./docker/
+COPY docker/entrypoint.sh docker/gunicorn.conf.py docker/healthcheck.py ./docker/
 ENV LICENSE_DATABASE_URL=sqlite:////data/license_store.sqlite3
 USER app
 EXPOSE 8000

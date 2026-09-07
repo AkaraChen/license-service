@@ -23,17 +23,14 @@ from .forms import DeviceNameForm, RedeemForm
 log = logging.getLogger(__name__)
 
 
-def _entitlement_response(request, entitlement, *, error=None, rename_forms=None, status=200):
+def _entitlement_response(request, entitlement, *, rename_forms=None, status=200):
     forms = rename_forms or {}
     rows = [
         (d, forms.get(d.pk) or DeviceNameForm(initial={"display_name": d.display_name}))
         for d in entitlement.devices.order_by("pk")
     ]
     return render(
-        request,
-        "licenses/entitlement.html",
-        {"entitlement": entitlement, "devices": rows, "error": error},
-        status=status,
+        request, "licenses/entitlement.html", {"entitlement": entitlement, "devices": rows}, status=status
     )
 
 
@@ -101,11 +98,7 @@ def entitlement_page(request, entitlement_id):
 @require_POST
 def unbind_page(request, device_id):
     device = get_object_or_404(Device, pk=device_id, entitlement__account=request.user)
-    try:
-        services.unbind(device)
-    except Failure as exc:
-        log.warning("unbind", extra={"outcome": exc.code})
-        return _entitlement_response(request, device.entitlement, error=exc.message, status=400)
+    services.unbind(device)
     log.info(
         "unbind", extra={"entitlement_id": device.entitlement_id, "product_id": device.entitlement.product_id}
     )
@@ -120,12 +113,7 @@ def rename_page(request, device_id):
     if not form.is_valid():
         log.warning("rename", extra={"outcome": "validation_error"})
         return _entitlement_response(request, device.entitlement, rename_forms={device.pk: form}, status=400)
-    try:
-        services.rename_device(device, **form.cleaned_data)
-    except Failure as exc:
-        log.warning("rename", extra={"outcome": exc.code})
-        form.add_error(None, exc.message)
-        return _entitlement_response(request, device.entitlement, rename_forms={device.pk: form}, status=400)
+    services.rename_device(device, **form.cleaned_data)
     log.info(
         "rename", extra={"entitlement_id": device.entitlement_id, "product_id": device.entitlement.product_id}
     )

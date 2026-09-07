@@ -41,23 +41,29 @@ class LicenseAPI(NinjaAPI):
     def get_openapi_operation_id(self, operation):
         return operation.view_func.__name__
 
-    def on_exception(self, request, exc):
-        if isinstance(exc, Failure):
-            log.warning("api_error", extra={"outcome": exc.code})
-            return JsonResponse(exc.envelope(), status=exc.status)
-        if isinstance(exc, HttpError) and exc.status_code == 403:
-            return csrf_failure(request)
-        if isinstance(exc, Http404):
-            return JsonResponse(NotFound().envelope(), status=404)
-        if isinstance(exc, AuthenticationError):
-            log.warning("api_error", extra={"outcome": "unauthenticated"})
-            return JsonResponse(Unauthenticated().envelope(), status=401)
-        if isinstance(exc, (SchemaError, DjangoValidationError, UnicodeError, RequestDataTooBig)):
-            return JsonResponse(ValidationError().envelope(), status=400)
-        return super().on_exception(request, exc)
-
 
 api = LicenseAPI(title="License Service", version="3.0.0", openapi_url="/openapi.json", docs_url="/docs")
+
+
+@api.exception_handler(Failure)
+def error_response(request, exc):
+    log.warning("api_error", extra={"outcome": exc.code})
+    return JsonResponse(exc.envelope(), status=exc.status)
+
+
+@api.exception_handler(HttpError)
+def http_error_response(request, exc):
+    if exc.status_code == 403:
+        return csrf_failure(request)
+    return api.create_response(request, {"detail": str(exc)}, status=exc.status_code)
+
+
+api.add_exception_handler(Http404, lambda request, exc: error_response(request, NotFound()))
+api.add_exception_handler(
+    AuthenticationError, lambda request, exc: error_response(request, Unauthenticated())
+)
+for exception in (SchemaError, DjangoValidationError, UnicodeError, RequestDataTooBig):
+    api.add_exception_handler(exception, lambda request, exc: error_response(request, ValidationError()))
 
 
 class AdminSession(SessionAuth):

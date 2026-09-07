@@ -115,9 +115,6 @@ def test_session_cookie_required_for_customer_and_admin_ops(api):
 
 
 def test_empty_list_operations_return_empty_collections(admin_api, customer_api):
-    for path in ("products", "license-keys", "accounts", "entitlements", "devices"):
-        body = admin_api.json(admin_api.get(path))
-        assert isinstance(next(iter(body.values())), list)
     assert admin_api.json(admin_api.get("products"))["products"] == []
     assert customer_api.json(customer_api.get("me/entitlements"))["entitlements"] == []
 

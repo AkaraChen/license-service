@@ -90,6 +90,18 @@ wheels = [
 ]
 
 [[package]]
+name = "django-log-request-id"
+version = "2.1.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "django" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/6f/cc/ebc6f910e61b6c0614575aa14fa801d92ccc2c583be6706c8dbd82f599ba/django_log_request_id-2.1.2.tar.gz", hash = "sha256:4fe8e0702b09e8b08676f237d94063e0d54fc4d8867570bea6719ceba0a32486", size = 6795, upload-time = "2026-03-12T11:31:35.002Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/47/05/bcb2c93a571ea31b1f82c9995700a88145b7b1dfed6f379772ca8ac613bd/django_log_request_id-2.1.2-py3-none-any.whl", hash = "sha256:0819be0f199df16305ab92d9cd47bab9995b1b2f09d267420330638153e69cfe", size = 8636, upload-time = "2026-03-12T11:31:33.699Z" },
+]
+
+[[package]]
 name = "django-ninja"
 version = "1.7.0"
 source = { registry = "https://pypi.org/simple" }
@@ -180,6 +192,7 @@ dependencies = [
     { name = "dj-database-url" },
     { name = "django" },
     { name = "django-axes" },
+    { name = "django-log-request-id" },
     { name = "django-ninja" },
     { name = "django-ratelimit" },
     { name = "django-redis" },
@@ -189,6 +202,7 @@ dependencies = [
     { name = "pydantic" },
     { name = "pytest" },
     { name = "pytest-django" },
+    { name = "python-json-logger" },
     { name = "setuptools" },
 ]
 
@@ -202,6 +216,7 @@ requires-dist = [
     { name = "dj-database-url", specifier = ">=3,<4" },
     { name = "django", specifier = ">=5.2" },
     { name = "django-axes", specifier = ">=8.3.1,<9" },
+    { name = "django-log-request-id", specifier = ">=2.1.2" },
     { name = "django-ninja", specifier = ">=1.4,<2" },
     { name = "django-ratelimit", specifier = ">=4.1,<5" },
     { name = "django-redis", specifier = ">=5.4,<7" },
@@ -211,6 +226,7 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.11,<3" },
     { name = "pytest", specifier = ">=8.0" },
     { name = "pytest-django", specifier = ">=4.8" },
+    { name = "python-json-logger", specifier = ">=4.2.0" },
     { name = "setuptools", specifier = ">=70,<81" },
 ]
 
@@ -360,6 +376,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/44/f6/3851312120c2bf2f19cafff931e75059aad1ba670703cd751e2fde9bc942/pytest_django-4.14.0.tar.gz", hash = "sha256:26787dd3f422cfbab8f55b80a776e2edea7a11092cb74e960bef1312515708ef", size = 94700, upload-time = "2026-08-10T14:13:08.319Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/9c/03/850bffad2b581c440ca51c039d74504d5a422c94bda0bdb8a8ba5068d48b/pytest_django-4.14.0-py3-none-any.whl", hash = "sha256:c533b08d89cc675efcd5398eea270b34547e35f9a3608e2c9748dd88428ea187", size = 27067, upload-time = "2026-08-10T14:13:06.998Z" },
+]
+
+[[package]]
+name = "python-json-logger"
+version = "4.2.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/21/25/5473e46b179f8e8b4ad3aeeb36773d1701b7770eaf5e5bc2025c7303b598/python_json_logger-4.2.0.tar.gz", hash = "sha256:e371ebe22ec01e289850102091a2b1f6fc9e655c7f1f5f29073936756c290afa", size = 18211, upload-time = "2026-08-15T11:36:38.232Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/dc/55/6467fde553886cb293e41538f3a8b4e4fd4688c6df242cf982162d8367fb/python_json_logger-4.2.0-py3-none-any.whl", hash = "sha256:158a52126fcd6869e09574d2b66272666f3dc8f468c62637ef9a1fa883719cb9", size = 14988, upload-time = "2026-08-15T11:36:36.821Z" },
 ]
 
 [[package]]

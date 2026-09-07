@@ -1,6 +1,8 @@
 import contextvars
 import logging
 
+from django.http import JsonResponse
+
 _request_id = contextvars.ContextVar("request_id", default=None)
 
 
@@ -44,5 +46,6 @@ class SameOriginCookieWriteMiddleware:
             and origin is not None
             and origin != f"{request.scheme}://{request.get_host()}"
         ):
-            return Forbidden("Cross-origin writes are not allowed.").as_response(request)
+            forbidden = Forbidden("Cross-origin writes are not allowed.")
+            return JsonResponse(forbidden.envelope(), status=forbidden.status)
         return None

@@ -176,8 +176,8 @@ The Django app lives in `src/licenses` with MTV in three packages: `models/`,
 stays in `src/licenses/admin.py`.
 Django Ninja routers in `src/licenses/views/api.py` declare the 25 machine operations.
 Pydantic request schemas live in `src/licenses/views/schemas.py`. SPEC error
-classes in `src/licenses/services/errors.py` subclass Ninja `HttpError`; the
-`{"error","message"}` envelope is `Failure.envelope()` / `Failure.as_response()`.
+classes in `src/licenses/services/errors.py` are domain exceptions; the JSON
+`{"error","message"}` envelope is built at the Ninja boundary.
 Views log mutations with the stdlib logger; `SameOriginCookieWriteMiddleware`
 rejects a mismatched Origin on cookie writes. Ninja already returns 405 for the
 wrong method. Ninja

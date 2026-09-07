@@ -5,16 +5,15 @@ the immediate response and never stored; password hashes are never displayed.
 
 import logging
 
-from admin_extra_buttons.api import ExtraButtonsMixin, button
 from django import forms
 from django.contrib import admin
-from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth.admin import GroupAdmin as BaseGroupAdmin
 from django.contrib.auth.models import Group, User
 from django.db import transaction
 from django.template.response import TemplateResponse
 from django.utils.translation import gettext_lazy as _
 from unfold.admin import ModelAdmin
+from unfold.decorators import action
 from unfold.widgets import (
     UnfoldAdminIntegerFieldWidget,
     UnfoldAdminSelectWidget,
@@ -63,7 +62,7 @@ class ProductAdmin(ModelAdmin):
 
 
 @admin.register(LicenseKey)
-class LicenseKeyAdmin(ExtraButtonsMixin, ModelAdmin):
+class LicenseKeyAdmin(ModelAdmin):
     list_display = (
         "key_prefix",
         "product",
@@ -75,6 +74,7 @@ class LicenseKeyAdmin(ExtraButtonsMixin, ModelAdmin):
     )
     fields = ("product", "max_devices", "expires_at")  # add form; key_hash is never shown
     actions = ("revoke_keys",)
+    actions_list = ("issue_batch",)
 
     def formfield_for_dbfield(self, db_field, request, **kwargs):
         if db_field.name == "max_devices":
@@ -91,7 +91,7 @@ class LicenseKeyAdmin(ExtraButtonsMixin, ModelAdmin):
         log.info("issue", extra={"product_id": key.product_id, "key_id": key.pk})
 
     def response_add(self, request, obj, post_url_continue=None):
-        context = self.get_common_context(request, title=_("Issue batch"))
+        context = {**self.admin_site.each_context(request), "title": _("Issue batch")}
         return issued_response(request, context, [request._issued_license_key])
 
     @admin.action(description="Revoke selected license keys")
@@ -100,15 +100,9 @@ class LicenseKeyAdmin(ExtraButtonsMixin, ModelAdmin):
         for key in queryset:
             services.revoke_key(key)
 
-    @button(
-        label=_("Issue batch"),
-        permission="licenses.add_licensekey",
-        change_list=True,
-        change_form=False,
-        decorators=[staff_member_required],
-    )
+    @action(description=_("Issue batch"), permissions=["add"], url_path="issue_batch")
     def issue_batch(self, request):
-        context = self.get_common_context(request, title=_("Issue batch"))
+        context = {**self.admin_site.each_context(request), "title": _("Issue batch")}
         form = BatchIssueForm(request.POST or None)
         if request.method == "POST" and form.is_valid():
             product = form.cleaned_data["product"]

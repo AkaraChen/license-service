@@ -1,5 +1,6 @@
 [project]
 site_name = "Shukka License"
+site_url = "https://shukka-license.akr.moe/"
 site_description = "Shukka License 部署与运维文档"
 docs_dir = "docs"
 site_dir = "site"

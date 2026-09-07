@@ -32,4 +32,15 @@ uv run zensical build --strict
 ```
 
 构建产物位于 `site/`。站点配置和导航位于 `zensical.toml`；新增页面后可在其中添加导航项。
-正式部署时，在配置的 `[project]` 中填写实际的 `site_url`。
+
+生产站点为 <https://shukka-license.akr.moe/>，托管于 Netlify 项目
+[`shukka-license`](https://app.netlify.com/projects/shukka-license)。
+`.github/workflows/docs-deploy.yml` 在每次推送到 `main` 时使用锁定依赖严格构建，
+然后将 `site/` 发布到生产；也可以在 GitHub Actions 手动运行该工作流。
+其他分支不会发布。构建失败不会替换线上版本。
+
+部署需要在此仓库配置 Actions Secret `NETLIFY_AUTH_TOKEN`，项目 ID 直接记录在工作流中。
+令牌失效时更新此 Secret，再重新运行工作流。
+Cloudflare 的 `shukka-license.akr.moe` 使用 DNS-only CNAME 指向
+`shukka-license.netlify.app`；HTTPS 证书由 Netlify 管理。
+需要回滚时，在 Netlify 的 Deploys 中选择之前的成功部署并发布。

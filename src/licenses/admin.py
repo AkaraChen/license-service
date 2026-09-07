@@ -49,26 +49,6 @@ class BatchIssueForm(forms.Form):
     )
 
 
-class LoggedAdmin(ModelAdmin):
-    def log_addition(self, request, obj, message):
-        log.info("admin_add", extra={"model": obj._meta.label_lower, "object_id": obj.pk})
-        return super().log_addition(request, obj, message)
-
-    def log_change(self, request, obj, message):
-        log.info("admin_change", extra={"model": obj._meta.label_lower, "object_id": obj.pk})
-        return super().log_change(request, obj, message)
-
-    def log_deletions(self, request, queryset):
-        log.info(
-            "admin_delete",
-            extra={
-                "model": self.model._meta.label_lower,
-                "object_ids": list(queryset.values_list("pk", flat=True)),
-            },
-        )
-        return super().log_deletions(request, queryset)
-
-
 def issued_response(request, context, keys):
     response = TemplateResponse(
         request, "admin/licenses/licensekey/issue_batch.html", {**context, "issued": keys}
@@ -78,12 +58,12 @@ def issued_response(request, context, keys):
 
 
 @admin.register(Product)
-class ProductAdmin(LoggedAdmin):
+class ProductAdmin(ModelAdmin):
     list_display = ("code", "name", "created_at")
 
 
 @admin.register(LicenseKey)
-class LicenseKeyAdmin(ExtraButtonsMixin, LoggedAdmin):
+class LicenseKeyAdmin(ExtraButtonsMixin, ModelAdmin):
     list_display = (
         "key_prefix",
         "product",
@@ -148,7 +128,7 @@ class LicenseKeyAdmin(ExtraButtonsMixin, LoggedAdmin):
 
 
 @admin.register(Entitlement)
-class EntitlementAdmin(LoggedAdmin):
+class EntitlementAdmin(ModelAdmin):
     list_display = ("account", "product", "status", "max_devices", "expires_at", "created_at")
     fields = ("account", "product", "status", "max_devices", "expires_at", "source_key", "created_at")
     readonly_fields = ("account", "product", "max_devices", "expires_at", "source_key", "created_at")
@@ -159,7 +139,7 @@ class EntitlementAdmin(LoggedAdmin):
 
 
 @admin.register(Device)
-class DeviceAdmin(LoggedAdmin):
+class DeviceAdmin(ModelAdmin):
     list_display = ("device_fingerprint", "entitlement", "status", "display_name", "bound_at")
     actions = ("unbind_devices",)
 
@@ -181,7 +161,7 @@ admin.site.unregister(Group)
 
 
 @admin.register(User)
-class AccountAdmin(LoggedAdmin):
+class AccountAdmin(ModelAdmin):
     """One Account type (4.1.1). Password hashes are never rendered."""
 
     list_display = ("username", "is_staff", "is_active", "date_joined")
@@ -197,5 +177,5 @@ class AccountAdmin(LoggedAdmin):
 
 
 @admin.register(Group)
-class UnfoldGroupAdmin(BaseGroupAdmin, LoggedAdmin):
+class UnfoldGroupAdmin(BaseGroupAdmin, ModelAdmin):
     pass

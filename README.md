@@ -61,8 +61,9 @@ also rejects an unreachable database (`licenses.E002`).
   documented, never a secret), `is_admin = User.is_staff`, `created_at = date_joined`.
   One Account type for Admin and Customer. Admin bootstrap: `createsuperuser` only.
 - **Password hash**: PBKDF2-SHA256 (Django default `PASSWORD_HASHERS`).
-- **Session mechanism**: Django server-side sessions stored in the License Store DB
-  (durable across restarts), cookie name `sessionid`, HttpOnly.
+- **Session mechanism**: `django-user-sessions` in the License Store DB
+  (durable across restarts), cookie name `sessionid`, HttpOnly. Sessions
+  have a user FK so deactivation deletes by queryset.
 - **Store engines**: SQLite (default) and PostgreSQL, via the Django ORM. Core
   Conformance runs on SQLite; PostgreSQL is supported through the same ORM layer
   (run the suite with `LICENSE_DATABASE_URL=postgresql://…` for the Real Integration
@@ -118,10 +119,10 @@ also rejects an unreachable database (`licenses.E002`).
 - **Registration abuse controls**: `django-ratelimit` decorators enforce shared
   source/global hourly limits before password hashing. HTML uses the package's
   middleware for the 429 response; JSON preserves its audited error envelope.
-  `django-redis` supplies a registration lock for serializing account creation and
-  checking the total account capacity. Counter updates, expiry and locking are
-  library-owned. Both packages use `REMOTE_ADDR`, ignoring forwarded client-IP
-  headers; configure the trusted edge accordingly.
+  Duplicate usernames fail on the case-insensitive unique index. Account
+  capacity is a count check before `create_user`. Both packages use
+  `REMOTE_ADDR`, ignoring forwarded client-IP headers; configure the trusted
+  edge accordingly.
 - **Redis**: all workers must use the same Redis and cache namespace. The supplied
   Compose service enables AOF and disables eviction. Redis is a required service;
   failures do not bypass the limits (JSON login/registration returns 503). Deleting

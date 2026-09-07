@@ -9,12 +9,12 @@ from django.contrib.auth.models import User
 from django.core.exceptions import RequestDataTooBig
 from django.db import IntegrityError, transaction
 from django.http import Http404, JsonResponse
-from django.shortcuts import get_object_or_404 as django_get_object_or_404
+from django.shortcuts import get_object_or_404
 from django.views.decorators.cache import never_cache
 from django_ratelimit.exceptions import Ratelimited
 from ninja import NinjaAPI, Router, Status
 from ninja.decorators import decorate_view
-from ninja.errors import ValidationError as SchemaError
+from ninja.errors import AuthenticationError, ValidationError as SchemaError
 from ninja.security import SessionAuth
 
 from .. import accounts, services
@@ -41,6 +41,11 @@ class LicenseAPI(NinjaAPI):
         if isinstance(exc, Failure):
             log.warning("api_error", extra={"outcome": exc.code})
             return JsonResponse(exc.envelope(), status=exc.status)
+        if isinstance(exc, Http404):
+            return JsonResponse(NotFound().envelope(), status=404)
+        if isinstance(exc, AuthenticationError):
+            log.warning("api_error", extra={"outcome": "unauthenticated"})
+            return JsonResponse(Unauthenticated().envelope(), status=401)
         if isinstance(exc, (SchemaError, UnicodeError, RequestDataTooBig)):
             return JsonResponse(ValidationError().envelope(), status=400)
         return super().on_exception(request, exc)
@@ -49,30 +54,15 @@ class LicenseAPI(NinjaAPI):
 api = LicenseAPI(title="License Service", version="3.0.0", openapi_url="/openapi.json", docs_url="/docs")
 
 
-def get_object_or_404(klass, *args, **kwargs):
-    try:
-        return django_get_object_or_404(klass, *args, **kwargs)
-    except Http404:
-        raise NotFound() from None
-
-
-class CustomerSession(SessionAuth):
+class AdminSession(SessionAuth):
     def authenticate(self, request, key):
         user = super().authenticate(request, key)
-        if user is None:
-            raise Unauthenticated()
-        return user
-
-
-class AdminSession(CustomerSession):
-    def authenticate(self, request, key):
-        user = super().authenticate(request, key)
-        if not user.is_staff:
+        if user is not None and not user.is_staff:
             raise Forbidden()
         return user
 
 
-customer_session = CustomerSession(csrf=False)
+customer_session = SessionAuth(csrf=False)
 admin_session = AdminSession(csrf=False)
 
 admin = Router(auth=admin_session)

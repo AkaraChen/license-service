@@ -11,7 +11,7 @@ from .devices import (
     unbind,
     validate,
 )
-from .errors import Failure, validate_text
+from .errors import Failure
 from .keys import hash_key, issue_key, revoke_key
 from .redeem import redeem
 
@@ -28,5 +28,4 @@ __all__ = (
     "revoke_key",
     "unbind",
     "validate",
-    "validate_text",
 )

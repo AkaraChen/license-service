@@ -83,12 +83,3 @@ class RateLimited(Failure):
 
 class StoreUnavailable(Failure):
     code, status, message = "store_unavailable", 503, "The license store is unavailable."
-
-
-def validate_text(value):
-    if "\x00" in value:
-        raise ValidationError("Text must not contain null characters.")
-    try:
-        value.encode("utf-8")
-    except UnicodeError:
-        raise ValidationError("Text must contain valid Unicode characters.") from None

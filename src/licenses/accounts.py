@@ -3,14 +3,11 @@
 import logging
 
 from django.contrib.auth.models import User
-from django.contrib.sessions.models import Session
-from django.core.cache import cache
 from django.db import IntegrityError, transaction
-from django.db.models import Value
-from django.db.models.functions import Lower
 from django.shortcuts import render
 from django.utils.translation import gettext
 from django_ratelimit.decorators import ratelimit
+from user_sessions.models import Session
 
 from .services.errors import Conflict, RateLimited
 
@@ -23,28 +20,18 @@ def register_account(username, password, request=None):
     """Open self-registration. Invariant 4: always is_admin=False."""
     if request is not None:
         admit_registration(request)
-
-    def work():
-        if User.objects.count() >= MAX_ACCOUNTS:
-            raise RateLimited("Account capacity reached. Contact the operator.")
-        if User.objects.alias(canonical=Lower("username")).filter(canonical=Lower(Value(username))).exists():
-            raise Conflict(gettext("This username is already taken."))
-        return User.objects.create_user(username=username, password=password)
-
+    if User.objects.count() >= MAX_ACCOUNTS:
+        raise RateLimited("Account capacity reached. Contact the operator.")
     try:
-        with cache.lock("registration", timeout=30, blocking_timeout=2):
-            with transaction.atomic():
-                return work()
+        with transaction.atomic():
+            return User.objects.create_user(username=username, password=password)
     except IntegrityError:
         raise Conflict(gettext("This username is already taken.")) from None
 
 
 def drop_account_sessions(account):
     """Delete this account's server-side sessions. Call after is_active changes."""
-    account_id = str(account.pk)
-    for session in Session.objects.iterator():
-        if session.get_decoded().get("_auth_user_id") == account_id:
-            session.delete()
+    Session.objects.filter(user_id=account.pk).delete()
 
 
 def set_account_active(account, active):

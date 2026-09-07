@@ -41,8 +41,7 @@ def test_customer_pages_full_flow(db, customer, product):
     assert page.status_code == 200
     assert b"css/tailwind.css" in page.content
     response = browser.post(
-        "/ui/register",
-        {"username": "carol", "password1": "carol-pw-1", "password2": "carol-pw-1"},
+        "/ui/register", {"username": "carol", "password1": "carol-pw-1", "password2": "carol-pw-1"}
     )
     assert response.status_code == 302  # registered and logged in
 
@@ -287,3 +286,14 @@ def test_admin_console_entitlement_immutable_fields_readonly(db, admin, redeemed
     assert 'name="status"' in body
     assert 'name="max_devices"' not in body
     assert 'name="expires_at' not in body
+
+
+def test_batch_action_requires_add_permission(db, customer, product):
+    customer.is_staff = True
+    customer.save(update_fields=("is_staff",))
+    client = Client()
+    client.force_login(customer)
+    path = "/admin/licenses/licensekey/issue_batch/"
+    assert client.get(path).status_code == 403
+    assert client.post(path, {"product": product.pk, "max_devices": 1, "count": 1}).status_code == 403
+    assert not LicenseKey.objects.exists()

@@ -78,6 +78,8 @@ INSTALLED_APPS = [
     "django_ratelimit",
 ]
 SESSION_ENGINE = "user_sessions.backends.db"
+# Django 5.2 admin.E410 hard-codes contrib SessionMiddleware; user_sessions replaces it.
+SILENCED_SYSTEM_CHECKS = ["admin.E410"]
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "user_sessions.middleware.SessionMiddleware",
